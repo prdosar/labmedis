@@ -22,6 +22,168 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("LabMedis.Domain.Entities.ChartAccount", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AccountClass")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsThirdParty")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("NormalBalance")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ParentCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("chart_accounts", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.JournalEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AttachmentFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("AttachmentPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("EntryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPosted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("JournalCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long?>("SourceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("journal_entries", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.JournalLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("CreditAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("DebitAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("JournalEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long?>("SupplierId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("journal_lines", (string)null);
+                });
+
             modelBuilder.Entity("LabMedis.Domain.Entities.Access", b =>
                 {
                     b.Property<long>("Id")
@@ -154,8 +316,9 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Code")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("ContactPerson")
                         .HasMaxLength(150)
@@ -956,6 +1119,11 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
@@ -980,6 +1148,8 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Code").IsUnique();
 
                     b.HasIndex("CountryId");
 
@@ -1110,6 +1280,310 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("warehouses", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrder", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("VatApplied")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long?>("InvoiceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("TotalHt")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalTva")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalTtc")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Profit")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.ToTable("customer_orders", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrderLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("CustomerOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("UnitPriceHt")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("UnitCostPrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("LineTotalHt")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LineTotalTva")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LineTotalTtc")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LineTotalCost")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerOrderId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("customer_order_lines", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrderDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("SupplierOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierOrderId");
+
+                    b.ToTable("supplier_order_documents", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrder", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("SupplierId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("Status")
+                        .HasDefaultValue(0)
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProformaReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProformaFilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ProformaReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContainerReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("FreightAmount")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("PaymentTerms")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Origin")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("ExpectedShippingDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("supplier_orders", (string)null);
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrderLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("SupplierOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .HasDefaultValue(1)
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OrderUnit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("UnitsPerCarton")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("UnitFobPrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasDefaultValue(false)
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierOrderId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("supplier_order_lines", (string)null);
                 });
 
             modelBuilder.Entity("LabMedis.Domain.Identity.Role", b =>
@@ -1563,6 +2037,39 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                     b.Navigation("Warehouse");
                 });
 
+            modelBuilder.Entity("LabMedis.Domain.Entities.JournalLine", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.ChartAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabMedis.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LabMedis.Domain.Entities.JournalEntry", "JournalEntry")
+                        .WithMany("Lines")
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LabMedis.Domain.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("JournalEntry");
+
+                    b.Navigation("Supplier");
+                });
+
             modelBuilder.Entity("LabMedis.Domain.Entities.Supplier", b =>
                 {
                     b.HasOne("LabMedis.Domain.Entities.Country", "Country")
@@ -1582,6 +2089,90 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrderLine", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.CustomerOrder", "CustomerOrder")
+                        .WithMany("Lines")
+                        .HasForeignKey("CustomerOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LabMedis.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerOrder");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrder", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LabMedis.Domain.Entities.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrderLine", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.SupplierOrder", "SupplierOrder")
+                        .WithMany("Lines")
+                        .HasForeignKey("SupplierOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LabMedis.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SupplierOrder");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrderDocument", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.SupplierOrder", "SupplierOrder")
+                        .WithMany("Documents")
+                        .HasForeignKey("SupplierOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SupplierOrder");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrder", b =>
+                {
+                    b.HasOne("LabMedis.Domain.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Supplier");
+
+                    b.Navigation("Lines");
+
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<long>", b =>
@@ -1633,6 +2224,21 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.SupplierOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("LabMedis.Domain.Entities.JournalEntry", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("LabMedis.Domain.Entities.Access", b =>

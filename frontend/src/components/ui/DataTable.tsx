@@ -16,9 +16,10 @@ interface Props<T> {
   keyExtractor: (row: T) => string | number
   emptyMessage?: string
   actions?: (row: T) => ReactNode
+  rowClassName?: (row: T) => string
 }
 
-export function DataTable<T>({ columns, rows, loading, keyExtractor, emptyMessage = 'Aucune donnée', actions }: Props<T>) {
+export function DataTable<T>({ columns, rows, loading, keyExtractor, emptyMessage = 'Aucune donnée', actions, rowClassName }: Props<T>) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
       <table className="w-full text-sm">
@@ -62,7 +63,7 @@ export function DataTable<T>({ columns, rows, loading, keyExtractor, emptyMessag
             rows.map((row, i) => (
               <tr
                 key={keyExtractor(row)}
-                className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-50/30'}`}
+                className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-50/30'} ${rowClassName ? rowClassName(row) : ''}`}
               >
                 {columns.map(col => (
                   <td key={col.key} className={`px-4 py-3 text-gray-700 ${col.className ?? ''}`}>

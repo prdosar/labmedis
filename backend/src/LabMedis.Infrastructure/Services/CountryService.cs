@@ -44,10 +44,7 @@ public class CountryService : BaseRepository<Country>, ICountryService
         if (await DbSet.AnyAsync(x => x.Name == name, cancellationToken))
             throw new DomainException($"Un pays '{name}' existe déjà.");
 
-        var isoCode = Trim(dto.IsoCode)?.ToUpperInvariant();
-        if (isoCode is not null && await DbSet.AnyAsync(x => x.IsoCode == isoCode, cancellationToken))
-            throw new DomainException($"Le code ISO '{isoCode}' est déjà utilisé.");
-
+        var isoCode = await NextIsoCodeAsync(cancellationToken);
         var entity = new Country { Name = name, IsoCode = isoCode, Description = Trim(dto.Description) };
         await CreateAsync(entity, cancellationToken);
         _logger.LogInformation("Pays créé Id={Id} Name={Name}", entity.Id, entity.Name);
@@ -64,13 +61,7 @@ public class CountryService : BaseRepository<Country>, ICountryService
             && await DbSet.AnyAsync(x => x.Id != id && x.Name == name, cancellationToken))
             throw new DomainException($"Un autre pays utilise déjà le nom '{name}'.");
 
-        var isoCode = Trim(dto.IsoCode)?.ToUpperInvariant();
-        if (isoCode is not null && !string.Equals(entity.IsoCode, isoCode, StringComparison.Ordinal)
-            && await DbSet.AnyAsync(x => x.Id != id && x.IsoCode == isoCode, cancellationToken))
-            throw new DomainException($"Le code ISO '{isoCode}' est déjà utilisé par un autre pays.");
-
         entity.Name = name;
-        entity.IsoCode = isoCode;
         entity.Description = Trim(dto.Description);
         await UpdateAsync(entity, cancellationToken);
         return ToDto(entity);
@@ -89,6 +80,17 @@ public class CountryService : BaseRepository<Country>, ICountryService
 
     public Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default)
         => base.RestoreAsync(id, cancellationToken);
+
+    private async Task<string> NextIsoCodeAsync(CancellationToken ct)
+    {
+        var codes = await DbSet.IgnoreQueryFilters()
+            .Select(x => x.IsoCode).ToListAsync(ct);
+        var max = codes
+            .Where(c => c != null && int.TryParse(c, out _))
+            .Select(c => int.Parse(c!))
+            .DefaultIfEmpty(0).Max();
+        return (max + 1).ToString("D2");
+    }
 
     private static CountryDto ToDto(Country x) => new(x.Id, x.Name, x.IsoCode, x.Description, x.CreatedAt, x.UpdatedAt);
     private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();

@@ -20,8 +20,10 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+            options
+                .UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName))
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
         services
             .AddIdentityCore<User>(options =>
@@ -62,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleAccessRepository, RoleAccessRepository>();
 
         // Services
+        services.AddScoped<IAccountingService, AccountingService>();
         services.AddScoped<IWarehouseService, WarehouseService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ITherapeuticClassService, TherapeuticClassService>();
@@ -80,6 +83,9 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryService, DeliveryService>();
         services.AddScoped<IStockMovementService, StockMovementService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ICustomerOrderService, CustomerOrderService>();
+        services.AddScoped<ISupplierOrderService, SupplierOrderService>();
+        services.AddScoped<IFileStorageService, FileStorageService>();
 
         return services;
     }
@@ -90,5 +96,6 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync(cancellationToken);
         await DataSeeder.SeedAsync(scope.ServiceProvider, cancellationToken);
+        await AccountingSeeder.SeedAsync(db);
     }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Pencil, Trash2, RotateCcw, Search, X, Eye } from 'lucide-react'
 import type { ProductDto, CategoryDto, TherapeuticClassDto, WarehouseDto, SupplierDto, ProductFormDto, DosageDto, PackagingDto, CountryDto, CustomsRegimeDto } from '../../api/types'
 import { productsApi, categoriesApi, therapeuticClassesApi, warehousesApi, suppliersApi, productFormsApi, dosagesApi, packagingsApi, countriesApi, customsRegimesApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -12,18 +13,49 @@ import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { Input, Select } from '../../components/ui/Input'
 
 interface Form {
-  code: string; designation: string; cipCode: string; activeIngredient: string
+  designation: string; cipCode: string; activeIngredient: string
   warehouseId: string; categoryId: string; therapeuticClassId: string
   productFormId: string; dosageId: string; packagingId: string
   originCountryId: string; customsRegimeId: string; supplierId: string
 }
-const empty: Form = { code: '', designation: '', cipCode: '', activeIngredient: '', warehouseId: '', categoryId: '', therapeuticClassId: '', productFormId: '', dosageId: '', packagingId: '', originCountryId: '', customsRegimeId: '', supplierId: '' }
+const empty: Form = { designation: '', cipCode: '', activeIngredient: '', warehouseId: '', categoryId: '', therapeuticClassId: '', productFormId: '', dosageId: '', packagingId: '', originCountryId: '', customsRegimeId: '', supplierId: '' }
+
+const selectClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
 export function ProductsPage() {
   const { toast } = useToast()
-  const fetcher = useCallback((p: number, s: number) => productsApi.getAll(p, s), [])
+  const navigate = useNavigate()
+
+  // ── Filters ──────────────────────────────────────────────────────────────────
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [catFilter, setCatFilter] = useState('')
+  const [tcFilter, setTcFilter] = useState('')
+  const [supFilter, setSupFilter] = useState('')
+  const [showDeleted, setShowDeleted] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 350)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  const fetcher = useCallback(
+    (p: number, s: number) => productsApi.getAll(p, s, {
+      search: search || undefined,
+      categoryId: catFilter ? Number(catFilter) : undefined,
+      therapeuticClassId: tcFilter ? Number(tcFilter) : undefined,
+      supplierId: supFilter ? Number(supFilter) : undefined,
+      includeDeleted: showDeleted || undefined,
+    }),
+    [search, catFilter, tcFilter, supFilter, showDeleted],
+  )
+
   const { data, loading, page, setPage, refresh } = usePagedData({ fetcher })
 
+  const hasFilters = searchInput || catFilter || tcFilter || supFilter
+  function clearFilters() { setSearchInput(''); setSearch(''); setCatFilter(''); setTcFilter(''); setSupFilter('') }
+
+  // ── Reference data ────────────────────────────────────────────────────────────
   const [refs, setRefs] = useState<{
     categories: CategoryDto[]; therapeuticClasses: TherapeuticClassDto[]
     warehouses: WarehouseDto[]; suppliers: SupplierDto[]; productForms: ProductFormDto[]
@@ -50,6 +82,7 @@ export function ProductsPage() {
     })
   }, [])
 
+  // ── Edit / create modal ───────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ProductDto | null>(null)
   const [form, setForm] = useState<Form>(empty)
@@ -62,7 +95,7 @@ export function ProductsPage() {
   function openEdit(item: ProductDto) {
     setEditing(item)
     setForm({
-      code: item.code, designation: item.designation, cipCode: item.cipCode ?? '', activeIngredient: item.activeIngredient ?? '',
+      designation: item.designation, cipCode: item.cipCode ?? '', activeIngredient: item.activeIngredient ?? '',
       warehouseId: String(item.warehouseId), categoryId: String(item.categoryId), therapeuticClassId: String(item.therapeuticClassId),
       productFormId: item.productFormId ? String(item.productFormId) : '', dosageId: item.dosageId ? String(item.dosageId) : '',
       packagingId: item.packagingId ? String(item.packagingId) : '', originCountryId: item.originCountryId ? String(item.originCountryId) : '',
@@ -74,14 +107,14 @@ export function ProductsPage() {
   const setF = (k: keyof Form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleSave() {
-    if (!form.code.trim() || !form.designation.trim() || !form.warehouseId || !form.categoryId || !form.therapeuticClassId || !form.supplierId) {
-      setFormError('Code, désignation, entrepôt, catégorie, classe thérapeutique et fournisseur sont obligatoires.')
+    if (!form.designation.trim() || !form.warehouseId || !form.categoryId || !form.therapeuticClassId || !form.supplierId) {
+      setFormError('Désignation, entrepôt, catégorie, classe thérapeutique et fournisseur sont obligatoires.')
       return
     }
     setSaving(true); setFormError(null)
     try {
       const dto = {
-        code: form.code.trim(), designation: form.designation.trim(),
+        designation: form.designation.trim(),
         cipCode: form.cipCode || null, activeIngredient: form.activeIngredient || null,
         warehouseId: Number(form.warehouseId), categoryId: Number(form.categoryId),
         therapeuticClassId: Number(form.therapeuticClassId), supplierId: Number(form.supplierId),
@@ -108,20 +141,73 @@ export function ProductsPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{data ? `${data.totalCount} produit(s)` : ''}</p>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-gray-500">{data ? `${data.totalCount} produit(s)` : ''}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+            Afficher supprimés
+          </label>
+        </div>
         <Button onClick={openCreate} icon={<Plus size={15} />}>Ajouter</Button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-end gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+        {/* Text search */}
+        <div className="relative flex-1 min-w-56">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Code, désignation, principe actif…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            className={`${selectClass} w-full pl-9`}
+          />
+        </div>
+
+        {/* Category */}
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className={selectClass}>
+          <option value="">Toutes catégories</option>
+          {refs.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        {/* Therapeutic class */}
+        <select value={tcFilter} onChange={e => setTcFilter(e.target.value)} className={selectClass}>
+          <option value="">Toutes classes</option>
+          {refs.therapeuticClasses.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+
+        {/* Supplier */}
+        <select value={supFilter} onChange={e => setSupFilter(e.target.value)} className={selectClass}>
+          <option value="">Tous fournisseurs</option>
+          {refs.suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
+        {/* Clear */}
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <X size={14} />
+            Effacer
+          </button>
+        )}
       </div>
 
       <DataTable
         rows={data?.items ?? []} loading={loading} keyExtractor={r => r.id}
         emptyMessage="Aucun produit."
+        rowClassName={r => r.isDeleted ? 'opacity-50' : ''}
         columns={[
           { key: 'code', header: 'Code', width: 'w-28', render: r => <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{r.code}</span> },
           { key: 'designation', header: 'Désignation', render: r => (
             <div>
               <p className="font-semibold text-gray-900 leading-tight">{r.designation}</p>
-              {r.activeIngredient && <p className="text-xs text-gray-400 mt-0.5">{r.activeIngredient}</p>}
+              {r.isDeleted && <span className="text-xs text-red-500 font-medium">Supprimé</span>}
+              {!r.isDeleted && r.activeIngredient && <p className="text-xs text-gray-400 mt-0.5">{r.activeIngredient}</p>}
             </div>
           )},
           { key: 'categoryName', header: 'Catégorie', render: r => (
@@ -129,12 +215,19 @@ export function ProductsPage() {
           )},
           { key: 'therapeuticClassName', header: 'Classe', render: r => <span className="text-sm text-gray-600">{r.therapeuticClassName ?? '—'}</span> },
           { key: 'supplierName', header: 'Fournisseur', render: r => <span className="text-sm text-gray-600">{r.supplierName ?? '—'}</span> },
-          { key: 'warehouseName', header: 'Entrepôt', render: r => <span className="text-xs text-gray-500">{r.warehouseName ?? '—'}</span> },
+          { key: 'stockQuantity', header: 'Stock', width: 'w-24', render: r => (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${r.stockQuantity > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              {r.stockQuantity}
+            </span>
+          )},
         ]}
-        actions={row => (<>
-          <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Pencil size={14} /></button>
-          <button onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
-          <button onClick={async () => { await productsApi.restore(row.id); toast('Restauré.'); refresh() }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><RotateCcw size={14} /></button>
+        actions={row => row.isDeleted ? (<>
+          <button title="Détails" onClick={() => navigate(`/products/${row.id}`)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Eye size={14} /></button>
+          <button title="Restaurer" onClick={async () => { await productsApi.restore(row.id); toast('Restauré.'); refresh() }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><RotateCcw size={14} /></button>
+        </>) : (<>
+          <button title="Détails" onClick={() => navigate(`/products/${row.id}`)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Eye size={14} /></button>
+          <button title="Modifier" onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Pencil size={14} /></button>
+          <button title="Supprimer" onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
         </>)}
       />
       {data && <Pagination page={page} totalPages={data.totalPages} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />}
@@ -143,10 +236,9 @@ export function ProductsPage() {
         <div className="flex flex-col gap-4">
           {formError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{formError}</div>}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Code *" value={form.code} onChange={e => setF('code')(e.target.value)} placeholder="LMD-PROD-001" />
+            <Input label="Désignation *" value={form.designation} onChange={e => setF('designation')(e.target.value)} placeholder="Nom commercial du produit" />
             <Input label="Code CIP" value={form.cipCode} onChange={e => setF('cipCode')(e.target.value)} />
           </div>
-          <Input label="Désignation *" value={form.designation} onChange={e => setF('designation')(e.target.value)} placeholder="Nom commercial du produit" />
           <Input label="Principe actif" value={form.activeIngredient} onChange={e => setF('activeIngredient')(e.target.value)} />
           <div className="grid grid-cols-2 gap-4">
             <Select label="Catégorie *" value={form.categoryId} onChange={setF('categoryId')} options={refs.categories.map(c => ({ value: c.id, label: c.name }))} placeholder="Sélectionner…" />

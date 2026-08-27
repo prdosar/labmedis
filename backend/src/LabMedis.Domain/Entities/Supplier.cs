@@ -7,6 +7,7 @@ public class Supplier : BaseEntity
     private readonly List<Product> _products = new();
     private readonly List<Purchase> _purchases = new();
 
+    public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Address { get; set; }
     public string? PostalBox { get; set; }

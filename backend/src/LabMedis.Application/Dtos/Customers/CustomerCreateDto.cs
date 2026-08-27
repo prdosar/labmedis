@@ -1,7 +1,6 @@
 namespace LabMedis.Application.Dtos.Customers;
 
 public record CustomerCreateDto(
-    string? Code,
     string Name,
     string? Address,
     string? PostalBox,

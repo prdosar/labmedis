@@ -11,7 +11,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.ToTable("customers");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Code).HasMaxLength(30);
+        builder.Property(x => x.Code).IsRequired().HasMaxLength(10);
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Address).HasMaxLength(300);
         builder.Property(x => x.PostalBox).HasMaxLength(50);
@@ -25,6 +25,13 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasOne(x => x.Country)
             .WithMany()
             .HasForeignKey(x => x.CountryId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Property(x => x.ChartAccountId);
+        builder.HasOne(x => x.ChartAccount)
+            .WithMany()
+            .HasForeignKey(x => x.ChartAccountId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
     }

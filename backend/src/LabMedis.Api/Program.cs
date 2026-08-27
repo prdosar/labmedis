@@ -2,6 +2,7 @@ using System.Text;
 using LabMedis.Api.Infrastructure;
 using LabMedis.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -47,6 +48,15 @@ builder.Services.AddInfrastructure(builder.Configuration);
 var app = builder.Build();
 
 await app.Services.ApplyMigrationsAsync();
+
+// Serve uploaded files as static assets
+var uploadPath = app.Configuration["UploadPath"] ?? Path.Combine(app.Environment.ContentRootPath, "uploads");
+Directory.CreateDirectory(uploadPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadPath),
+    RequestPath = "/uploads"
+});
 
 app.UseCors();
 app.UseExceptionHandler();

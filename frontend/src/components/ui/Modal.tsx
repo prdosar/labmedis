@@ -49,6 +49,8 @@ export function ConfirmDialog({
   title,
   message,
   loading,
+  confirmLabel = 'Confirmer',
+  confirmVariant = 'danger',
 }: {
   isOpen: boolean
   onClose: () => void
@@ -56,7 +58,13 @@ export function ConfirmDialog({
   title: string
   message: string
   loading?: boolean
+  confirmLabel?: string
+  confirmVariant?: 'danger' | 'primary'
 }) {
+  const btnClass = confirmVariant === 'primary'
+    ? 'px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2'
+    : 'px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2'
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <p className="text-sm text-gray-600 mb-6">{message}</p>
@@ -70,10 +78,10 @@ export function ConfirmDialog({
         <button
           onClick={onConfirm}
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
+          className={btnClass}
         >
           {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-          Confirmer
+          {confirmLabel}
         </button>
       </div>
     </Modal>

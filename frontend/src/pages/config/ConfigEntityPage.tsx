@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import type { PagedResult, SimpleEntity } from '../../api/types'
 import { usePagedData } from '../../hooks/usePagedData'
 import { useToast } from '../../contexts/ToastContext'
@@ -29,10 +29,18 @@ interface FormState {
   description: string
 }
 
+const searchInputClass = 'w-full rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+
 export function ConfigEntityPage<T extends SimpleEntity>({ entityApi, entityName, entityNamePlural }: Props<T>) {
   const { toast } = useToast()
   const fetcher = useCallback((p: number, s: number) => entityApi.getAll(p, s), [entityApi])
-  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher })
+  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 200 })
+
+  const [search, setSearch] = useState('')
+
+  const filtered = (data?.items ?? []).filter(r =>
+    r.name.toLowerCase().includes(search.toLowerCase()),
+  )
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<T | null>(null)
@@ -93,36 +101,41 @@ export function ConfigEntityPage<T extends SimpleEntity>({ entityApi, entityName
     }
   }
 
-  async function handleRestore(item: T) {
-    try {
-      await entityApi.restore(item.id)
-      toast(`${entityName} restauré.`)
-      refresh()
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Restauration impossible.', 'error')
-    }
-  }
-
   return (
     <div className="flex flex-col gap-5">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">
-            {data ? `${data.totalCount} ${entityNamePlural.toLowerCase()}` : ''}
-          </p>
-        </div>
+        <p className="text-sm text-gray-500">
+          {data ? `${search ? `${filtered.length} / ` : ''}${data.totalCount} ${entityNamePlural.toLowerCase()}` : ''}
+        </p>
         <Button onClick={openCreate} icon={<Plus size={15} />}>
           Ajouter
         </Button>
       </div>
 
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder={`Rechercher un(e) ${entityName.toLowerCase()}…`}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className={searchInputClass}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
       {/* Table */}
       <DataTable
-        rows={data?.items ?? []}
+        rows={filtered}
         loading={loading}
         keyExtractor={r => r.id}
-        emptyMessage={`Aucun(e) ${entityName.toLowerCase()} pour l'instant.`}
+        emptyMessage={search ? `Aucun résultat pour "${search}".` : `Aucun(e) ${entityName.toLowerCase()} pour l'instant.`}
         columns={[
           { key: 'id', header: '#', width: 'w-14', render: r => <span className="text-gray-400 text-xs">#{r.id}</span> },
           { key: 'name', header: 'Nom', render: r => <span className="font-medium text-gray-900">{r.name}</span> },
@@ -141,16 +154,12 @@ export function ConfigEntityPage<T extends SimpleEntity>({ entityApi, entityName
               className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
               <Trash2 size={14} />
             </button>
-            <button onClick={() => handleRestore(row)} title="Restaurer"
-              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
-              <RotateCcw size={14} />
-            </button>
           </>
         )}
       />
 
-      {/* Pagination */}
-      {data && (
+      {/* Pagination — hidden when search active */}
+      {data && !search && (
         <Pagination
           page={page}
           totalPages={data.totalPages}

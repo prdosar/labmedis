@@ -114,8 +114,9 @@ public static class DataSeeder
         if (await db.Countries.AnyAsync(ct))
             return;
 
-        foreach (var (name, iso) in CountrySeeds)
-            db.Countries.Add(new Country { Name = name, IsoCode = iso });
+        var sorted = CountrySeeds.OrderBy(n => n).ToArray();
+        for (var i = 0; i < sorted.Length; i++)
+            db.Countries.Add(new Country { Name = sorted[i], IsoCode = (i + 1).ToString("D2") });
         await db.SaveChangesAsync(ct);
     }
 
@@ -214,11 +215,14 @@ public static class DataSeeder
 
         var countries = await db.Countries.ToDictionaryAsync(c => c.Name, c => c.Id, ct);
 
-        foreach (var (name, address, postalBox, phone, countryName) in SupplierSeeds)
+        var suppliersSorted = SupplierSeeds.OrderBy(s => s.Name).ToArray();
+        for (var i = 0; i < suppliersSorted.Length; i++)
         {
+            var (name, address, postalBox, phone, countryName) = suppliersSorted[i];
             countries.TryGetValue(countryName, out var countryId);
             db.Suppliers.Add(new Supplier
             {
+                Code = (i + 1).ToString("D2"),
                 Name = name,
                 Address = address,
                 PostalBox = postalBox,
@@ -241,10 +245,13 @@ public static class DataSeeder
         var countries = await db.Countries.ToDictionaryAsync(c => c.Name, c => c.Id, ct);
         countries.TryGetValue("Togo", out var togoId);
 
-        foreach (var (name, address, postalBox, phone, city) in CustomerSeeds)
+        var customerSeq = 0;
+        foreach (var (name, address, postalBox, phone, city) in CustomerSeeds.OrderBy(s => s.Item1))
         {
+            customerSeq++;
             db.Customers.Add(new Customer
             {
+                Code = customerSeq.ToString("D2"),
                 Name = name,
                 Address = address,
                 PostalBox = postalBox,
@@ -294,8 +301,12 @@ public static class DataSeeder
         var packagings = await db.Packagings
             .ToDictionaryAsync(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase, ct);
 
-        var suppliers = await db.Suppliers
-            .ToDictionaryAsync(s => s.Name, s => s.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var supplierEntities = await db.Suppliers.ToListAsync(ct);
+        var suppliers = supplierEntities.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
+        var supplierCodesById = supplierEntities.ToDictionary(s => s.Id, s => s.Code);
+
+        // Track sequential suffix per prefix to ensure uniqueness
+        var prefixCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         // Première TherapeuticClass par catégorie (fallback quand non renseignée)
         var firstClassByCategory = await db.TherapeuticClasses
@@ -321,8 +332,8 @@ public static class DataSeeder
             if (rawSupplier is not null)
             {
                 var supplierKey = supplierAliases.TryGetValue(rawSupplier, out var aliased) ? aliased : rawSupplier;
-                if (suppliers.TryGetValue(supplierKey, out var sid))
-                    currentSupplierId = sid;
+                if (suppliers.TryGetValue(supplierKey, out var sup))
+                    currentSupplierId = sup.Id;
             }
             if (currentSupplierId == 0)
                 continue;
@@ -347,9 +358,15 @@ public static class DataSeeder
             if (rawPackaging is not null && packagings.TryGetValue(rawPackaging, out var pid))
                 packagingId = pid;
 
+            // Generate composite code: countryCodesupplierCodewarehouseCodeseq
+            var supplierCode = supplierCodesById.GetValueOrDefault(currentSupplierId, "00");
+            var productPrefix = $"00{supplierCode}{warehouse.Code}";
+            prefixCounts[productPrefix] = prefixCounts.GetValueOrDefault(productPrefix) + 1;
+            var productCode = $"{productPrefix}{prefixCounts[productPrefix]:D3}";
+
             db.Products.Add(new Product
             {
-                Code = $"P{(i + 1):D3}",
+                Code = productCode,
                 Designation = designation,
                 WarehouseId = warehouse.Id,
                 CategoryId = categoryId,
@@ -435,15 +452,9 @@ public static class DataSeeder
         "carton/72", "carton/84", "carton/100", "carton/200"
     };
 
-    private static readonly (string Name, string IsoCode)[] CountrySeeds =
+    private static readonly string[] CountrySeeds =
     {
-        ("Togo",         "TGO"),
-        ("France",       "FRA"),
-        ("Maroc",        "MAR"),
-        ("Tunisie",      "TUN"),
-        ("Inde",         "IND"),
-        ("Suisse",       "CHE"),
-        ("Burkina Faso", "BFA")
+        "Togo", "France", "Maroc", "Tunisie", "Inde", "Suisse", "Burkina Faso"
     };
 
     private static readonly (string Code, string Name, string Description)[] TransportTypeSeeds =

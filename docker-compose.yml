@@ -31,8 +31,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=labmedis_dev_password"
+      UploadPath: /app/uploads
+      UploadBaseUrl: /uploads
     ports:
       - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - labmedis-net
 
@@ -68,6 +72,7 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
 
 networks:
   labmedis-net:

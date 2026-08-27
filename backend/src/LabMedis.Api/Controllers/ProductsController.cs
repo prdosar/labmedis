@@ -14,8 +14,15 @@ public class ProductsController : ControllerBase
     public ProductsController(IProductService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<ProductDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<ProductDto>>> GetAll(
+        [FromQuery] int page = 1, [FromQuery] int size = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] long? categoryId = null,
+        [FromQuery] long? therapeuticClassId = null,
+        [FromQuery] long? supplierId = null,
+        [FromQuery] bool includeDeleted = false,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, search, categoryId, therapeuticClassId, supplierId, includeDeleted, ct));
 
     [HttpGet("select")]
     public async Task<ActionResult<IReadOnlyList<ProductDto>>> GetForSelect(CancellationToken ct)
@@ -54,5 +61,12 @@ public class ProductsController : ControllerBase
     {
         var restored = await _service.RestoreAsync(id, ct);
         return restored ? NoContent() : NotFound();
+    }
+
+    [HttpGet("{id:long}/history")]
+    public async Task<ActionResult<ProductHistoryDto>> GetHistory(long id, CancellationToken ct)
+    {
+        var history = await _service.GetHistoryAsync(id, ct);
+        return history is null ? NotFound() : Ok(history);
     }
 }

@@ -14,8 +14,8 @@ public class CustomersController : ControllerBase
     public CustomersController(ICustomerService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<CustomerDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<CustomerDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, [FromQuery] bool includeDeleted = false, CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, includeDeleted, ct));
 
     [HttpGet("select")]
     public async Task<ActionResult<IReadOnlyList<CustomerDto>>> GetForSelect(CancellationToken ct)

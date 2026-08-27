@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import type { UserDto } from '../../api/types'
 import { usersApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -17,10 +17,18 @@ interface EditForm { email: string; fullName: string; isActive: boolean; roles: 
 
 const AVAILABLE_ROLES = ['Admin', 'Gestionnaire', 'Commercial', 'Technicien', 'Caissier']
 
+const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+
 export function UsersPage() {
   const { toast } = useToast()
   const fetcher = useCallback((p: number, s: number) => usersApi.getAll(p, s), [])
-  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher })
+  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 100 })
+  const [search, setSearch] = useState('')
+  const filtered = (data?.items ?? []).filter(r =>
+    r.userName.toLowerCase().includes(search.toLowerCase()) ||
+    r.email.toLowerCase().includes(search.toLowerCase()) ||
+    (r.fullName ?? '').toLowerCase().includes(search.toLowerCase()),
+  )
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<UserDto | null>(null)
@@ -76,12 +84,18 @@ export function UsersPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{data ? `${data.totalCount} utilisateur(s)` : ''}</p>
+        <p className="text-sm text-gray-500">{data ? `${search ? `${filtered.length} / ` : ''}${data.totalCount} utilisateur(s)` : ''}</p>
         <Button onClick={() => { setFormError(null); setCreateOpen(true) }} icon={<Plus size={15} />}>Ajouter</Button>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input type="text" placeholder="Rechercher un utilisateur…" value={search} onChange={e => setSearch(e.target.value)} className={searchInputClass} />
+        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"><X size={13} /></button>}
+      </div>
+
       <DataTable
-        rows={data?.items ?? []} loading={loading} keyExtractor={r => r.id}
+        rows={filtered} loading={loading} keyExtractor={r => r.id}
         emptyMessage="Aucun utilisateur."
         columns={[
           { key: 'userName', header: 'Identifiant', render: r => (
@@ -112,7 +126,7 @@ export function UsersPage() {
           <button onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
         </>)}
       />
-      {data && <Pagination page={page} totalPages={data.totalPages} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />}
+      {data && !search && <Pagination page={page} totalPages={data.totalPages} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />}
 
       {/* Create */}
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nouvel utilisateur" size="sm">

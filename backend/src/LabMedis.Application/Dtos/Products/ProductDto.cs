@@ -24,5 +24,7 @@ public record ProductDto(
     string? CustomsRegimeName,
     long SupplierId,
     string? SupplierName,
+    int StockQuantity,
+    bool IsDeleted,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

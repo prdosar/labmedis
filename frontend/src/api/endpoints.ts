@@ -2,23 +2,37 @@ import { api } from './client'
 import type {
   AccessDto,
   CategoryDto,
+  ChartAccountDto,
   CountryDto,
   CustomerDto,
+  CustomerOrderDto,
+  CustomerOrderPreviewDto,
+  CustomerOrderSummaryDto,
+  CustomerStatsDto,
   CustomsRegimeDto,
   DeliveryDto,
   DosageDto,
   InvoiceDto,
+  JournalEntryDto,
+  ManualJournalEntryInput,
   PackagingDto,
   PagedResult,
+  PnLDto,
   ProductDto,
   ProductFormDto,
+  ProductHistoryDto,
   PurchaseDto,
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
+  SupplierOrderDocumentDto,
+  SupplierOrderDto,
+  SupplierOrderSummaryDto,
   TherapeuticClassDto,
+  ThirdPartyLedgerDto,
   TokenResponse,
   TransportTypeDto,
+  TrialBalanceLineDto,
   UserDto,
   WarehouseDto,
 } from './types'
@@ -92,30 +106,47 @@ export const warehousesApi = {
 
 // ─── Supplier ────────────────────────────────────────────────────────────────
 
+interface SupplierWriteDto {
+  name: string
+  address: string | null
+  postalBox: string | null
+  phone: string | null
+  email: string | null
+  countryId: number | null
+  contactPerson: string | null
+}
+
 export const suppliersApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<SupplierDto>>(`/suppliers?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, includeDeleted = false) =>
+    api.get<PagedResult<SupplierDto>>(`/suppliers?page=${page}&size=${size}&includeDeleted=${includeDeleted}`),
   getForSelect: () => api.get<SupplierDto[]>('/suppliers/select'),
   getById: (id: number) => api.get<SupplierDto>(`/suppliers/${id}`),
-  create: (dto: Omit<SupplierDto, 'id' | 'createdAt' | 'updatedAt' | 'countryName'>) =>
-    api.post<SupplierDto>('/suppliers', dto),
-  update: (id: number, dto: Omit<SupplierDto, 'id' | 'createdAt' | 'updatedAt' | 'countryName'>) =>
-    api.put<SupplierDto>(`/suppliers/${id}`, dto),
+  create: (dto: SupplierWriteDto) => api.post<SupplierDto>('/suppliers', dto),
+  update: (id: number, dto: SupplierWriteDto) => api.put<SupplierDto>(`/suppliers/${id}`, dto),
   delete: (id: number) => api.delete(`/suppliers/${id}`),
   restore: (id: number) => api.post(`/suppliers/${id}/restore`),
 }
 
 // ─── Customer ────────────────────────────────────────────────────────────────
 
+interface CustomerWriteDto {
+  name: string
+  address: string | null
+  postalBox: string | null
+  phone: string | null
+  email: string | null
+  city: string | null
+  countryId: number | null
+  contactPerson: string | null
+}
+
 export const customersApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<CustomerDto>>(`/customers?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, includeDeleted = false) =>
+    api.get<PagedResult<CustomerDto>>(`/customers?page=${page}&size=${size}&includeDeleted=${includeDeleted}`),
   getForSelect: () => api.get<CustomerDto[]>('/customers/select'),
   getById: (id: number) => api.get<CustomerDto>(`/customers/${id}`),
-  create: (dto: Omit<CustomerDto, 'id' | 'createdAt' | 'updatedAt' | 'countryName'>) =>
-    api.post<CustomerDto>('/customers', dto),
-  update: (id: number, dto: Omit<CustomerDto, 'id' | 'createdAt' | 'updatedAt' | 'countryName'>) =>
-    api.put<CustomerDto>(`/customers/${id}`, dto),
+  create: (dto: CustomerWriteDto) => api.post<CustomerDto>('/customers', dto),
+  update: (id: number, dto: CustomerWriteDto) => api.put<CustomerDto>(`/customers/${id}`, dto),
   delete: (id: number) => api.delete(`/customers/${id}`),
   restore: (id: number) => api.post(`/customers/${id}/restore`),
 }
@@ -123,14 +154,22 @@ export const customersApi = {
 // ─── Product ─────────────────────────────────────────────────────────────────
 
 export const productsApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<ProductDto>>(`/products?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, filters?: { search?: string; categoryId?: number; therapeuticClassId?: number; supplierId?: number; includeDeleted?: boolean }) => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) })
+    if (filters?.search) qs.set('search', filters.search)
+    if (filters?.categoryId) qs.set('categoryId', String(filters.categoryId))
+    if (filters?.therapeuticClassId) qs.set('therapeuticClassId', String(filters.therapeuticClassId))
+    if (filters?.supplierId) qs.set('supplierId', String(filters.supplierId))
+    if (filters?.includeDeleted) qs.set('includeDeleted', 'true')
+    return api.get<PagedResult<ProductDto>>(`/products?${qs}`)
+  },
   getForSelect: () => api.get<ProductDto[]>('/products/select'),
   getById: (id: number) => api.get<ProductDto>(`/products/${id}`),
   create: (dto: object) => api.post<ProductDto>('/products', dto),
   update: (id: number, dto: object) => api.put<ProductDto>(`/products/${id}`, dto),
   delete: (id: number) => api.delete(`/products/${id}`),
   restore: (id: number) => api.post(`/products/${id}/restore`),
+  getHistory: (id: number) => api.get<ProductHistoryDto>(`/products/${id}/history`),
 }
 
 // ─── Purchase ────────────────────────────────────────────────────────────────
@@ -188,6 +227,138 @@ export const stockMovementsApi = {
       `/stock-movements/by-warehouse/${warehouseId}?page=${page}&size=${size}`,
     ),
   getById: (id: number) => api.get<StockMovementDto>(`/stock-movements/${id}`),
+}
+
+// ─── Accounting ──────────────────────────────────────────────────────────────
+
+export const accountingApi = {
+  getChartOfAccounts: () =>
+    api.get<ChartAccountDto[]>('/accounting/chart-of-accounts'),
+
+  getJournal: (params: { page?: number; size?: number; journalCode?: string; from?: string; to?: string; search?: string }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
+    if (params.journalCode) qs.set('journalCode', params.journalCode)
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+    if (params.search) qs.set('search', params.search)
+    return api.get<PagedResult<JournalEntryDto>>(`/accounting/journal?${qs}`)
+  },
+
+  getJournalEntry: (id: number) =>
+    api.get<JournalEntryDto>(`/accounting/journal/${id}`),
+
+  postManualEntry: (dto: ManualJournalEntryInput) =>
+    api.post<JournalEntryDto>('/accounting/journal', dto),
+
+  getTrialBalance: (from?: string, to?: string) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    return api.get<TrialBalanceLineDto[]>(`/accounting/trial-balance?${qs}`)
+  },
+
+  getPnL: (from?: string, to?: string) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    return api.get<PnLDto>(`/accounting/pnl?${qs}`)
+  },
+
+  getCustomerLedger: (customerId: number, from?: string, to?: string) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    return api.get<ThirdPartyLedgerDto>(`/accounting/customer-ledger/${customerId}?${qs}`)
+  },
+
+  getSupplierLedger: (supplierId: number, from?: string, to?: string) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    return api.get<ThirdPartyLedgerDto>(`/accounting/supplier-ledger/${supplierId}?${qs}`)
+  },
+}
+
+// ─── CustomerOrders ──────────────────────────────────────────────────────────
+
+export const customerOrdersApi = {
+  getAll: (params: { page?: number; size?: number; status?: string; customerId?: number }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
+    if (params.status) qs.set('status', params.status)
+    if (params.customerId) qs.set('customerId', String(params.customerId))
+    return api.get<PagedResult<CustomerOrderSummaryDto>>(`/customer-orders?${qs}`)
+  },
+  getById: (id: number) => api.get<CustomerOrderDto>(`/customer-orders/${id}`),
+  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number }[] }) =>
+    api.post<CustomerOrderDto>('/customer-orders', dto),
+  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number }[] }) =>
+    api.put<CustomerOrderDto>(`/customer-orders/${id}`, dto),
+  validate: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/validate`),
+  complete: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/complete`),
+  cancel: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/cancel`),
+  preview: (dto: { vatApplied: boolean; lines: { productId: number; quantity: number }[] }) =>
+    api.post<CustomerOrderPreviewDto>('/customer-orders/preview', dto),
+  getStock: (productId: number, excludeOrderId?: number) => {
+    const qs = excludeOrderId ? `?excludeOrderId=${excludeOrderId}` : ''
+    return api.get<number>(`/customer-orders/stock/${productId}${qs}`)
+  },
+  getCustomerStats: (customerId: number) =>
+    api.get<CustomerStatsDto>(`/customer-orders/customer-stats/${customerId}`),
+}
+
+// ─── SupplierOrders ──────────────────────────────────────────────────────────
+
+export const supplierOrdersApi = {
+  getAll: (params: { page?: number; size?: number; status?: string; supplierId?: number }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
+    if (params.status) qs.set('status', params.status)
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    return api.get<PagedResult<SupplierOrderSummaryDto>>(`/supplier-orders?${qs}`)
+  },
+  getById: (id: number) => api.get<SupplierOrderDto>(`/supplier-orders/${id}`),
+  create: (dto: {
+    supplierId: number
+    orderDate: string
+    currency: string
+    notes?: string | null
+    lines: { productId: number; quantity: number; orderUnit: string; unitsPerCarton?: number | null }[]
+  }) => api.post<SupplierOrderDto>('/supplier-orders', dto),
+  update: (id: number, dto: {
+    orderDate: string
+    currency: string
+    notes?: string | null
+    lines: { productId: number; quantity: number; orderUnit: string; unitsPerCarton?: number | null }[]
+  }) => api.put<SupplierOrderDto>(`/supplier-orders/${id}`, dto),
+  send: (id: number) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/send`),
+  cancel: (id: number) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/cancel`),
+  receiveProforma: (id: number, dto: {
+    proformaReference?: string | null
+    containerReference?: string | null
+    freightAmount?: number | null
+    paymentTerms?: string | null
+    brand?: string | null
+    origin?: string | null
+    expectedShippingDate?: string | null
+    lines: { lineId: number; unitFobPrice?: number | null }[]
+  }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-proforma`, dto),
+  getDocuments: (id: number) => api.get<SupplierOrderDocumentDto[]>(`/supplier-orders/${id}/documents`),
+  uploadDocument: async (id: number, file: File, documentType: string): Promise<SupplierOrderDocumentDto> => {
+    const token = localStorage.getItem('labmedis_token')
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('documentType', documentType)
+    const res = await fetch(`/api/supplier-orders/${id}/documents`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.title ?? err?.message ?? 'Erreur upload')
+    }
+    return res.json()
+  },
+  deleteDocument: (documentId: number) => api.delete<void>(`/supplier-orders/documents/${documentId}`),
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────

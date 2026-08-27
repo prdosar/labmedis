@@ -11,6 +11,8 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.ToTable("suppliers");
         builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.Code).IsRequired().HasMaxLength(10);
+        builder.HasIndex(x => x.Code).IsUnique();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Address).HasMaxLength(300);
         builder.Property(x => x.PostalBox).HasMaxLength(50);

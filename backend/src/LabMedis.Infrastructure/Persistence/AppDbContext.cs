@@ -34,12 +34,60 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<Access> Accesses => Set<Access>();
     public DbSet<RoleAccess> RoleAccesses => Set<RoleAccess>();
+    public DbSet<ChartAccount> ChartAccounts => Set<ChartAccount>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<JournalLine> JournalLines => Set<JournalLine>();
+    public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
+    public DbSet<CustomerOrderLine> CustomerOrderLines => Set<CustomerOrderLine>();
+    public DbSet<SupplierOrder> SupplierOrders => Set<SupplierOrder>();
+    public DbSet<SupplierOrderLine> SupplierOrderLines => Set<SupplierOrderLine>();
+    public DbSet<SupplierOrderDocument> SupplierOrderDocuments => Set<SupplierOrderDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // ── ChartAccount ──────────────────────────────────────────
+        modelBuilder.Entity<ChartAccount>(b =>
+        {
+            b.ToTable("chart_accounts");
+            b.HasIndex(a => a.Code).IsUnique();
+        });
+
+        // ── JournalEntry ─────────────────────────────────────────
+        modelBuilder.Entity<JournalEntry>(b =>
+        {
+            b.ToTable("journal_entries");
+            b.HasMany(e => e.Lines)
+             .WithOne(l => l.JournalEntry)
+             .HasForeignKey(l => l.JournalEntryId)
+             .OnDelete(DeleteBehavior.Cascade);
+            b.Navigation(e => e.Lines)
+             .HasField("_lines")
+             .UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        // ── JournalLine ──────────────────────────────────────────
+        modelBuilder.Entity<JournalLine>(b =>
+        {
+            b.ToTable("journal_lines");
+            b.Property(l => l.DebitAmount).HasColumnType("numeric(18,2)");
+            b.Property(l => l.CreditAmount).HasColumnType("numeric(18,2)");
+            b.HasOne(l => l.Account)
+             .WithMany()
+             .HasForeignKey(l => l.AccountId)
+             .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(l => l.Customer)
+             .WithMany()
+             .HasForeignKey(l => l.CustomerId)
+             .OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(l => l.Supplier)
+             .WithMany()
+             .HasForeignKey(l => l.SupplierId)
+             .OnDelete(DeleteBehavior.SetNull);
+        });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

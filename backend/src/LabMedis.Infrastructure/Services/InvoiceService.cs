@@ -12,10 +12,12 @@ namespace LabMedis.Infrastructure.Services;
 public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
 {
     private readonly ILogger<InvoiceService> _logger;
+    private readonly IAccountingService _accounting;
 
-    public InvoiceService(AppDbContext dbContext, ILogger<InvoiceService> logger) : base(dbContext)
+    public InvoiceService(AppDbContext dbContext, ILogger<InvoiceService> logger, IAccountingService accounting) : base(dbContext)
     {
         _logger = logger;
+        _accounting = accounting;
     }
 
     public async Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
@@ -141,6 +143,29 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         if (invoice is null) return null;
         invoice.Issue();
         await UpdateAsync(invoice, cancellationToken);
+
+        // Post accounting entry (JV – Journal des Ventes)
+        var acc4111 = await _accounting.RequireAccountAsync("4111", cancellationToken);
+        var acc701  = await _accounting.RequireAccountAsync("701",  cancellationToken);
+        var acc4431 = await _accounting.RequireAccountAsync("4431", cancellationToken);
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "JV",
+            EntryDate   = invoice.InvoiceDate,
+            Reference   = invoice.Reference,
+            Description = $"Facture client {invoice.Customer?.Name}",
+            SourceType  = "InvoiceIssued",
+            SourceId    = invoice.Id,
+            IsPosted    = false
+        };
+        entry.AddLine(new JournalLine { AccountId = acc4111.Id, Label = $"Facture {invoice.Reference}", DebitAmount  = invoice.TotalTtc,   CreditAmount = 0,                    CustomerId = invoice.CustomerId });
+        entry.AddLine(new JournalLine { AccountId = acc701.Id,  Label = $"Ventes {invoice.Reference}",  DebitAmount  = 0,                  CreditAmount = invoice.SubtotalHt });
+        if (invoice.TotalTva > 0)
+            entry.AddLine(new JournalLine { AccountId = acc4431.Id, Label = $"TVA {invoice.Reference}", DebitAmount  = 0,                  CreditAmount = invoice.TotalTva });
+        entry.Validate();
+        await _accounting.PostAsync(entry, cancellationToken);
+
         _logger.LogInformation("Facture émise Id={Id}", id);
         return ToDto(invoice);
     }
@@ -151,6 +176,26 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         if (invoice is null) return null;
         invoice.RegisterPayment(dto.Amount);
         await UpdateAsync(invoice, cancellationToken);
+
+        // Post accounting entry (JT – Journal de Trésorerie)
+        var acc521  = await _accounting.RequireAccountAsync("521",  cancellationToken);
+        var acc4111 = await _accounting.RequireAccountAsync("4111", cancellationToken);
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "JT",
+            EntryDate   = DateTime.UtcNow.Date,
+            Reference   = $"REG-{invoice.Reference}",
+            Description = $"Règlement facture {invoice.Reference}",
+            SourceType  = "InvoicePayment",
+            SourceId    = invoice.Id,
+            IsPosted    = false
+        };
+        entry.AddLine(new JournalLine { AccountId = acc521.Id,  Label = $"Règlement {invoice.Reference}", DebitAmount  = dto.Amount, CreditAmount = 0 });
+        entry.AddLine(new JournalLine { AccountId = acc4111.Id, Label = $"Règlement {invoice.Reference}", DebitAmount  = 0,          CreditAmount = dto.Amount, CustomerId = invoice.CustomerId });
+        entry.Validate();
+        await _accounting.PostAsync(entry, cancellationToken);
+
         _logger.LogInformation("Règlement enregistré sur facture Id={Id} Montant={Amount}", id, dto.Amount);
         return ToDto(invoice);
     }
@@ -161,6 +206,29 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         if (invoice is null) return null;
         invoice.Cancel();
         await UpdateAsync(invoice, cancellationToken);
+
+        // Post reversal accounting entry (JOD – Journal des Opérations Diverses)
+        var acc701  = await _accounting.RequireAccountAsync("701",  cancellationToken);
+        var acc4431 = await _accounting.RequireAccountAsync("4431", cancellationToken);
+        var acc4111 = await _accounting.RequireAccountAsync("4111", cancellationToken);
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "JOD",
+            EntryDate   = DateTime.UtcNow.Date,
+            Reference   = $"ANN-{invoice.Reference}",
+            Description = $"Annulation facture {invoice.Reference}",
+            SourceType  = "InvoiceCancelled",
+            SourceId    = invoice.Id,
+            IsPosted    = false
+        };
+        entry.AddLine(new JournalLine { AccountId = acc701.Id,  Label = $"Annulation {invoice.Reference}", DebitAmount  = invoice.SubtotalHt, CreditAmount = 0 });
+        if (invoice.TotalTva > 0)
+            entry.AddLine(new JournalLine { AccountId = acc4431.Id, Label = $"TVA annulée {invoice.Reference}", DebitAmount  = invoice.TotalTva, CreditAmount = 0 });
+        entry.AddLine(new JournalLine { AccountId = acc4111.Id, Label = $"Annulation {invoice.Reference}", DebitAmount  = 0, CreditAmount = invoice.TotalTtc, CustomerId = invoice.CustomerId });
+        entry.Validate();
+        await _accounting.PostAsync(entry, cancellationToken);
+
         _logger.LogInformation("Facture annulée Id={Id}", id);
         return ToDto(invoice);
     }

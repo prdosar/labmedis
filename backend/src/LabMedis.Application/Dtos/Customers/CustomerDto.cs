@@ -12,5 +12,7 @@ public record CustomerDto(
     long? CountryId,
     string? CountryName,
     string? ContactPerson,
+    decimal Balance,
+    bool IsDeleted,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

@@ -1,7 +1,6 @@
 namespace LabMedis.Application.Dtos.Products;
 
 public record ProductUpdateDto(
-    string Code,
     string Designation,
     string? CipCode,
     string? ActiveIngredient,

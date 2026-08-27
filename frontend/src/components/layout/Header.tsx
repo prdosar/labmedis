@@ -5,6 +5,10 @@ const titles: Record<string, string> = {
   '/products': 'Produits',
   '/suppliers': 'Fournisseurs',
   '/customers': 'Clients',
+  '/orders/customers': 'Commandes clients',
+  '/orders/customers/new': 'Nouvelle commande client',
+  '/orders/suppliers': 'Commandes fournisseurs',
+  '/orders/suppliers/new': 'Nouveau bon de commande fournisseur',
   '/purchases': 'Achats',
   '/invoices': 'Factures',
   '/deliveries': 'Livraisons',
@@ -19,11 +23,20 @@ const titles: Record<string, string> = {
   '/config/customs-regimes': 'Régimes douaniers',
   '/config/transport-types': 'Types de transport',
   '/users': 'Utilisateurs',
+  '/accounting/journal': 'Journal comptable',
+  '/accounting/chart-of-accounts': 'Plan comptable SYSCOHADA',
+  '/accounting/trial-balance': 'Balance générale',
+  '/accounting/pnl': 'Compte de résultat',
+  '/accounting/third-party-ledger': 'Grand livre tiers',
 }
 
 export function Header() {
   const { pathname } = useLocation()
-  const title = titles[pathname] ?? 'LabMedis'
+  const title = titles[pathname]
+    ?? (/^\/products\/\d+/.test(pathname) ? 'Fiche produit'
+      : /^\/orders\/customers\/\d+\/edit/.test(pathname) ? 'Commande client'
+      : /^\/orders\/suppliers\/\d+\/edit/.test(pathname) ? 'Bon de commande fournisseur'
+      : 'LabMedis')
 
   return (
     <header className="fixed top-0 right-0 left-64 h-14 bg-white border-b border-gray-200 flex items-center px-6 z-20">

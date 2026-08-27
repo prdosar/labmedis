@@ -1,7 +1,6 @@
 namespace LabMedis.Application.Dtos.Customers;
 
 public record CustomerUpdateDto(
-    string? Code,
     string Name,
     string? Address,
     string? PostalBox,

@@ -6,7 +6,7 @@ public class Customer : BaseEntity
 {
     private readonly List<Invoice> _invoices = new();
 
-    public string? Code { get; set; }
+    public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Address { get; set; }
     public string? PostalBox { get; set; }
@@ -15,6 +15,9 @@ public class Customer : BaseEntity
     public string? City { get; set; }
     public long? CountryId { get; set; }
     public string? ContactPerson { get; set; }
+
+    public long? ChartAccountId { get; set; }
+    public ChartAccount? ChartAccount { get; set; }
 
     public Country? Country { get; set; }
     public IReadOnlyCollection<Invoice> Invoices => _invoices;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone } from 'lucide-react'
+import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X } from 'lucide-react'
 import type { SupplierDto, CountryDto } from '../../api/types'
 import { suppliersApi, countriesApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -26,11 +26,18 @@ function toForm(s: SupplierDto): Form {
   }
 }
 
+const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+
 export function SuppliersPage() {
   const { toast } = useToast()
-  const fetcher = useCallback((p: number, s: number) => suppliersApi.getAll(p, s), [])
-  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher })
+  const [showDeleted, setShowDeleted] = useState(false)
+  const fetcher = useCallback((p: number, s: number) => suppliersApi.getAll(p, s, showDeleted), [showDeleted])
+  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 100 })
   const [countries, setCountries] = useState<CountryDto[]>([])
+  const [search, setSearch] = useState('')
+  const filtered = (data?.items ?? []).filter(r =>
+    r.name.toLowerCase().includes(search.toLowerCase()),
+  )
 
   useEffect(() => { countriesApi.getForSelect().then(setCountries).catch(() => {}) }, [])
 
@@ -76,18 +83,35 @@ export function SuppliersPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{data ? `${data.totalCount} fournisseur(s)` : ''}</p>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-gray-500">{data ? `${search ? `${filtered.length} / ` : ''}${data.totalCount} fournisseur(s)` : ''}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+            Afficher supprimés
+          </label>
+        </div>
         <Button onClick={openCreate} icon={<Plus size={15} />}>Ajouter</Button>
       </div>
 
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input type="text" placeholder="Rechercher un fournisseur…" value={search} onChange={e => setSearch(e.target.value)} className={searchInputClass} />
+        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"><X size={13} /></button>}
+      </div>
+
       <DataTable
-        rows={data?.items ?? []} loading={loading} keyExtractor={r => r.id}
+        rows={filtered} loading={loading} keyExtractor={r => r.id}
         emptyMessage="Aucun fournisseur."
+        rowClassName={r => r.isDeleted ? 'opacity-50' : ''}
         columns={[
+          { key: 'code', header: 'Code', width: 'w-16', render: r => (
+            <span className="font-mono text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{r.code}</span>
+          )},
           { key: 'name', header: 'Fournisseur', render: r => (
             <div>
               <p className="font-semibold text-gray-900">{r.name}</p>
-              {r.contactPerson && <p className="text-xs text-gray-500">{r.contactPerson}</p>}
+              {r.isDeleted && <span className="text-xs text-red-500 font-medium">Supprimé</span>}
+              {!r.isDeleted && r.contactPerson && <p className="text-xs text-gray-500">{r.contactPerson}</p>}
             </div>
           )},
           { key: 'contact', header: 'Contact', render: r => (
@@ -99,13 +123,14 @@ export function SuppliersPage() {
           { key: 'countryName', header: 'Pays', render: r => r.countryName ?? <span className="text-gray-300">—</span> },
           { key: 'address', header: 'Adresse', render: r => <span className="text-gray-500 text-sm">{r.address ?? '—'}</span> },
         ]}
-        actions={row => (<>
-          <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Pencil size={14} /></button>
-          <button onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
-          <button onClick={async () => { await suppliersApi.restore(row.id); toast('Restauré.'); refresh() }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><RotateCcw size={14} /></button>
+        actions={row => row.isDeleted ? (
+          <button title="Restaurer" onClick={async () => { await suppliersApi.restore(row.id); toast('Restauré.'); refresh() }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><RotateCcw size={14} /></button>
+        ) : (<>
+          <button title="Modifier" onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Pencil size={14} /></button>
+          <button title="Supprimer" onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
         </>)}
       />
-      {data && <Pagination page={page} totalPages={data.totalPages} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />}
+      {data && !search && <Pagination page={page} totalPages={data.totalPages} totalCount={data.totalCount} pageSize={data.pageSize} onPageChange={setPage} />}
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Modifier — ${editing.name}` : 'Nouveau fournisseur'} size="lg">
         <div className="flex flex-col gap-4">
