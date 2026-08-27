@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LabMedis.Api/LabMedis.Api.csproj" />
+    <Project Path="src/LabMedis.Application/LabMedis.Application.csproj" />
+    <Project Path="src/LabMedis.Domain/LabMedis.Domain.csproj" />
+    <Project Path="src/LabMedis.Infrastructure/LabMedis.Infrastructure.csproj" />
+  </Folder>
+</Solution>

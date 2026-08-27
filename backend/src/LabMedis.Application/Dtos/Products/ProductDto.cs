@@ -1,0 +1,28 @@
+namespace LabMedis.Application.Dtos.Products;
+
+public record ProductDto(
+    long Id,
+    string Code,
+    string Designation,
+    string? CipCode,
+    string? ActiveIngredient,
+    long WarehouseId,
+    string? WarehouseName,
+    long CategoryId,
+    string? CategoryName,
+    long TherapeuticClassId,
+    string? TherapeuticClassName,
+    long? ProductFormId,
+    string? ProductFormName,
+    long? DosageId,
+    string? DosageName,
+    long? PackagingId,
+    string? PackagingName,
+    long? OriginCountryId,
+    string? OriginCountryName,
+    long? CustomsRegimeId,
+    string? CustomsRegimeName,
+    long SupplierId,
+    string? SupplierName,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt);

@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: labmedis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: labmedis
+      POSTGRES_USER: labmedis
+      POSTGRES_PASSWORD: labmedis_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labmedis -d labmedis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - labmedis-net
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labmedis-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=labmedis_dev_password"
+    ports:
+      - "8080:8080"
+    networks:
+      - labmedis-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: labmedis-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "5173:5173"
+    networks:
+      - labmedis-net
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: labmedis-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@labmedis.tg
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - labmedis-net
+
+volumes:
+  postgres_data:
+
+networks:
+  labmedis-net:
+    driver: bridge
