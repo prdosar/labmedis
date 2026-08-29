@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, X, Eye } from 'lucide-react'
 import { invoicesApi } from '../../api/endpoints'
 import type { InvoiceDto } from '../../api/types'
@@ -32,6 +33,7 @@ const inputCls =
   'px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white'
 
 export function CustomerInvoicesPage() {
+  const navigate = useNavigate()
   const [all, setAll] = useState<InvoiceDto[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -134,23 +136,36 @@ export function CustomerInvoicesPage() {
             render: r => <span className="font-semibold text-gray-900">{fmtXof(r.totalTtc)}</span>,
           },
           {
+            key: 'amountPaid', header: 'Encaissé', width: 'w-32',
+            render: r => <span className="font-medium text-green-600">{fmtXof(r.amountPaid)}</span>,
+          },
+          {
             key: 'balanceDue', header: 'Solde dû', width: 'w-32',
             render: r => (
-              <span className={r.balanceDue > 0 ? 'font-semibold text-red-600' : 'text-green-600'}>
+              <span className={r.balanceDue > 0 ? 'font-semibold text-red-600' : 'font-medium text-gray-400'}>
                 {fmtXof(r.balanceDue)}
               </span>
             ),
           },
           {
-            key: 'dueDate', header: 'Échéance', width: 'w-28',
-            render: r => r.dueDate
-              ? <span className="text-sm">{new Date(r.dueDate).toLocaleDateString('fr-FR')}</span>
-              : <span className="text-gray-300">—</span>,
+            key: 'pct', header: '%', width: 'w-20',
+            render: r => {
+              const pct = r.totalTtc > 0 ? Math.round((r.amountPaid / r.totalTtc) * 100) : 0
+              return (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                    <div className="bg-brand-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500">{pct}%</span>
+                </div>
+              )
+            },
           },
         ]}
-        actions={() => (
+        actions={r => (
           <button
             title="Voir détail"
+            onClick={() => navigate(`/invoices/customers/${r.id}`)}
             className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
           >
             <Eye size={14} />

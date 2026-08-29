@@ -21,5 +21,6 @@ public record SupplierInvoiceDto(
     decimal AmountPaid,
     decimal BalanceDue,
     string? Notes,
+    IReadOnlyList<SupplierInvoicePaymentDto> Payments,
     DateTime CreatedAt
 );

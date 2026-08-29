@@ -74,9 +74,27 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpPost("{id:long}/payment")]
-    public async Task<ActionResult<InvoiceDto>> RegisterPayment(long id, [FromBody] RegisterPaymentDto dto, CancellationToken ct)
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<InvoiceDto>> RegisterPayment(
+        long id,
+        [FromForm] decimal amount,
+        [FromForm] string paymentDate,
+        [FromForm] string? paymentMethod = null,
+        [FromForm] string? reference = null,
+        [FromForm] string? notes = null,
+        IFormFile? attachmentFile = null,
+        CancellationToken ct = default)
     {
-        var result = await _service.RegisterPaymentAsync(id, dto, ct);
+        var dto = new RegisterPaymentDto
+        {
+            Amount = amount,
+            PaymentDate = DateOnly.TryParse(paymentDate, out var pd) ? pd : DateOnly.FromDateTime(DateTime.UtcNow),
+            PaymentMethod = paymentMethod,
+            Reference = reference,
+            Notes = notes
+        };
+        await using var stream = attachmentFile is { Length: > 0 } ? attachmentFile.OpenReadStream() : null;
+        var result = await _service.RegisterPaymentAsync(id, dto, stream, attachmentFile?.FileName, ct);
         return result is null ? NotFound() : Ok(result);
     }
 

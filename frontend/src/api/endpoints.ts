@@ -21,7 +21,10 @@ import type {
   ProductDto,
   ProductFormDto,
   ProductHistoryDto,
+  PurchaseChargeDto,
   PurchaseDto,
+  PurchaseLineDto,
+  PurchaseSummaryDto,
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
@@ -43,6 +46,10 @@ import type {
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<TokenResponse>('/auth/login', { username, password }),
+  forgotPassword: (email: string) =>
+    api.post<void>('/auth/forgot-password', { email }),
+  resetPassword: (email: string, token: string, newPassword: string) =>
+    api.post<void>('/auth/reset-password', { email, token, newPassword }),
 }
 
 // ─── Simple entity factory ────────────────────────────────────────────────────
@@ -65,7 +72,13 @@ function simpleApi<T extends SimpleEntity>(path: string) {
 export const categoriesApi = simpleApi<CategoryDto>('/categories')
 export const productFormsApi = simpleApi<ProductFormDto>('/product-forms')
 export const dosagesApi = simpleApi<DosageDto>('/dosages')
-export const packagingsApi = simpleApi<PackagingDto>('/packagings')
+export const packagingsApi = {
+  ...simpleApi<PackagingDto>('/packagings'),
+  create: (dto: { name: string; description?: string | null; unitsPerPackaging?: number }) =>
+    api.post<PackagingDto>('/packagings', dto),
+  update: (id: number, dto: { name: string; description?: string | null; unitsPerPackaging?: number }) =>
+    api.put<PackagingDto>(`/packagings/${id}`, dto),
+}
 export const countriesApi = simpleApi<CountryDto>('/countries')
 export const customsRegimesApi = simpleApi<CustomsRegimeDto>('/customs-regimes')
 export const transportTypesApi = simpleApi<TransportTypeDto>('/transport-types')
@@ -184,9 +197,31 @@ export const purchasesApi = {
   delete: (id: number) => api.delete(`/purchases/${id}`),
   addLine: (id: number, dto: object) => api.post(`/purchases/${id}/lines`, dto),
   removeLine: (id: number, lineId: number) => api.delete(`/purchases/${id}/lines/${lineId}`),
+  updateLotPrice: (lineId: number, dto: { marginRate: number; fixedSellingPriceHt?: number | null }) =>
+    api.patch<PurchaseLineDto>(`/purchases/lines/${lineId}/price`, dto),
 }
 
 // ─── Invoice ─────────────────────────────────────────────────────────────────
+
+export interface PaymentFormData {
+  amount: number
+  paymentDate: string
+  paymentMethod?: string | null
+  reference?: string | null
+  notes?: string | null
+  attachmentFile?: File | null
+}
+
+function buildPaymentForm(data: PaymentFormData): FormData {
+  const fd = new FormData()
+  fd.append('amount', String(data.amount))
+  fd.append('paymentDate', data.paymentDate)
+  if (data.paymentMethod) fd.append('paymentMethod', data.paymentMethod)
+  if (data.reference) fd.append('reference', data.reference)
+  if (data.notes) fd.append('notes', data.notes)
+  if (data.attachmentFile) fd.append('attachmentFile', data.attachmentFile)
+  return fd
+}
 
 export const invoicesApi = {
   getAll: (page = 1, size = 10) =>
@@ -196,7 +231,8 @@ export const invoicesApi = {
   update: (id: number, dto: object) => api.put<InvoiceDto>(`/invoices/${id}`, dto),
   delete: (id: number) => api.delete(`/invoices/${id}`),
   issue: (id: number) => api.post<InvoiceDto>(`/invoices/${id}/issue`),
-  registerPayment: (id: number, dto: object) => api.post<InvoiceDto>(`/invoices/${id}/payment`, dto),
+  registerPayment: (id: number, data: PaymentFormData) =>
+    api.postForm<InvoiceDto>(`/invoices/${id}/payment`, buildPaymentForm(data)),
   cancel: (id: number) => api.post<InvoiceDto>(`/invoices/${id}/cancel`),
 }
 
@@ -316,6 +352,12 @@ export const supplierOrdersApi = {
     if (params.supplierId) qs.set('supplierId', String(params.supplierId))
     return api.get<PagedResult<SupplierOrderSummaryDto>>(`/supplier-orders?${qs}`)
   },
+  /** Récupère les commandes en réception ou réceptionnées pour le formulaire OD */
+  getReceptionOrders: () =>
+    Promise.all([
+      api.get<PagedResult<SupplierOrderSummaryDto>>('/supplier-orders?page=1&size=200&status=EnCoursDeRéception'),
+      api.get<PagedResult<SupplierOrderSummaryDto>>('/supplier-orders?page=1&size=200&status=Réceptionnée'),
+    ]).then(([a, b]) => [...a.items, ...b.items]),
   getById: (id: number) => api.get<SupplierOrderDto>(`/supplier-orders/${id}`),
   create: (dto: {
     supplierId: number
@@ -361,24 +403,51 @@ export const supplierOrdersApi = {
   }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-invoice`, dto),
   receiveGoods: (id: number, dto: {
     arrivalDate: string
+    transportMode: string
     exchangeRateToXof: number
-    commissionCoefficient: number
-    freightCoefficient: number
-    transitCoefficient: number
-    transferFeesCoefficient: number
-    defaultMarginCoefficient: number
     notes?: string | null
+    commissionRate: number
+    freightRate: number
+    transitRate: number
+    transferRate: number
     lines: {
       orderLineId: number
       lotNumber: string
-      quantity: number
-      unitFobPrice: number
+      quantityCartons: number
+      quantityLostCartons: number
+      unitsPerCarton: number
+      unitFobPricePerCarton: number
       expirationDate?: string | null
-      targetSellingPriceHt?: number | null
+      marginRate: number
+      fixedSellingPriceHt?: number | null
     }[]
   }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-goods`, dto),
-  registerPayment: (invoiceId: number, dto: { amount: number; notes?: string | null }) =>
-    api.post<SupplierInvoiceDto>(`/supplier-orders/invoices/${invoiceId}/payment`, dto),
+  closeReception: (id: number) =>
+    api.post<SupplierOrderDto>(`/supplier-orders/${id}/close-reception`),
+  getReceptions: (id: number) =>
+    api.get<PurchaseSummaryDto[]>(`/supplier-orders/${id}/receptions`),
+  addCharge: (purchaseId: number, dto: {
+    chargeType: string
+    description: string
+    amountXof: number
+    chargeDate: string
+    reference?: string | null
+    debitAccountCode: string
+    creditAccountCode: string
+    notes?: string | null
+  }) => api.post<PurchaseChargeDto>(`/supplier-orders/purchases/${purchaseId}/charges`, dto),
+  getCharges: (purchaseId: number) =>
+    api.get<PurchaseChargeDto[]>(`/supplier-orders/purchases/${purchaseId}/charges`),
+  getAllInvoices: (params: { page?: number; size?: number; status?: string; supplierId?: number }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 500) })
+    if (params.status) qs.set('status', params.status)
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    return api.get<PagedResult<SupplierInvoiceDto>>(`/supplier-orders/invoices?${qs}`)
+  },
+  getInvoiceById: (invoiceId: number) =>
+    api.get<SupplierInvoiceDto>(`/supplier-orders/invoices/${invoiceId}`),
+  registerPayment: (invoiceId: number, data: PaymentFormData) =>
+    api.postForm<SupplierInvoiceDto>(`/supplier-orders/invoices/${invoiceId}/payment`, buildPaymentForm(data)),
   getDocuments: (id: number) => api.get<SupplierOrderDocumentDto[]>(`/supplier-orders/${id}/documents`),
   uploadDocument: async (id: number, file: File, documentType: string): Promise<SupplierOrderDocumentDto> => {
     const token = localStorage.getItem('labmedis_token')
@@ -397,6 +466,8 @@ export const supplierOrdersApi = {
     return res.json()
   },
   deleteDocument: (documentId: number) => api.delete<void>(`/supplier-orders/documents/${documentId}`),
+  sendEmail: (id: number, recipientEmail?: string | null) =>
+    api.post<{ message: string }>(`/supplier-orders/${id}/send-email`, { recipientEmail: recipientEmail ?? null }),
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -405,7 +476,8 @@ export const usersApi = {
   getAll: (page = 1, size = 10) =>
     api.get<PagedResult<UserDto>>(`/users?page=${page}&size=${size}`),
   getById: (id: number) => api.get<UserDto>(`/users/${id}`),
-  create: (dto: { userName: string; email: string; password: string; fullName?: string | null; roles?: string[] }) =>
+  getRoles: () => api.get<string[]>('/users/roles'),
+  create: (dto: { userName: string; email: string; fullName?: string | null; roles?: string[] }) =>
     api.post<UserDto>('/users', dto),
   update: (id: number, dto: { email: string; fullName?: string | null; isActive: boolean; roles?: string[] }) =>
     api.put<UserDto>(`/users/${id}`, dto),

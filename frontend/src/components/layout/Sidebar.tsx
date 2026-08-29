@@ -26,6 +26,7 @@ import {
   TrendingUp,
   BookUser,
   ClipboardList,
+  Building2,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import logo from '../../assets/logo.png'
@@ -66,11 +67,13 @@ const configNav: NavItem[] = [
 ]
 
 const accountingNav: NavItem[] = [
-  { to: '/accounting/journal', label: 'Journal', icon: <ClipboardList size={16} /> },
+  { to: '/accounting/od', label: 'Opérations Diverses', icon: <FileText size={16} /> },
+  { to: '/accounting/journal', label: 'Journal général', icon: <ClipboardList size={16} /> },
   { to: '/accounting/chart-of-accounts', label: 'Plan comptable', icon: <BookOpen size={16} /> },
   { to: '/accounting/trial-balance', label: 'Balance générale', icon: <Scale size={16} /> },
   { to: '/accounting/pnl', label: 'Compte de résultat', icon: <TrendingUp size={16} /> },
   { to: '/accounting/third-party-ledger', label: 'Grand livre tiers', icon: <BookUser size={16} /> },
+  { to: '/accounting/supplier-account', label: 'Relevé fournisseur', icon: <Building2 size={16} /> },
 ]
 
 const adminNav: NavItem[] = [

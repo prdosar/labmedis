@@ -75,12 +75,68 @@ public class SupplierOrdersController : ControllerBase
         long id, [FromBody] ReceiveGoodsDto dto, CancellationToken ct)
         => Ok(await _service.ReceiveGoodsAsync(id, dto, ct));
 
+    [HttpPost("{id:long}/close-reception")]
+    public async Task<ActionResult<SupplierOrderDto>> CloseReception(long id, CancellationToken ct)
+        => Ok(await _service.CloseReceptionAsync(id, ct));
+
+    // ── Arrivages (réceptions) ────────────────────────────────────────────────────
+
+    [HttpGet("{id:long}/receptions")]
+    public async Task<ActionResult<IReadOnlyList<PurchaseSummaryDto>>> GetReceptions(long id, CancellationToken ct)
+        => Ok(await _service.GetReceptionsAsync(id, ct));
+
+    // ── Charges d'arrivage ────────────────────────────────────────────────────────
+
+    [HttpGet("purchases/{purchaseId:long}/charges")]
+    public async Task<ActionResult<IReadOnlyList<PurchaseChargeDto>>> GetCharges(long purchaseId, CancellationToken ct)
+        => Ok(await _service.GetPurchaseChargesAsync(purchaseId, ct));
+
+    [HttpPost("purchases/{purchaseId:long}/charges")]
+    public async Task<ActionResult<PurchaseChargeDto>> AddCharge(
+        long purchaseId, [FromBody] AddPurchaseChargeDto dto, CancellationToken ct)
+        => Ok(await _service.AddPurchaseChargeAsync(purchaseId, dto, ct));
+
     // ── Factures fournisseurs ─────────────────────────────────────────────────────
 
+    [HttpGet("invoices")]
+    public async Task<ActionResult<PagedResult<SupplierInvoiceDto>>> GetAllInvoices(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 50,
+        [FromQuery] string? status = null,
+        [FromQuery] long? supplierId = null,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllInvoicesAsync(page, size, status, supplierId, ct));
+
+    [HttpGet("invoices/{invoiceId:long}")]
+    public async Task<ActionResult<SupplierInvoiceDto>> GetInvoiceById(long invoiceId, CancellationToken ct)
+    {
+        var result = await _service.GetInvoiceByIdAsync(invoiceId, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpPost("invoices/{invoiceId:long}/payment")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<ActionResult<SupplierInvoiceDto>> RegisterPayment(
-        long invoiceId, [FromBody] RegisterSupplierPaymentDto dto, CancellationToken ct)
-        => Ok(await _service.RegisterPaymentAsync(invoiceId, dto, ct));
+        long invoiceId,
+        [FromForm] decimal amount,
+        [FromForm] string paymentDate,
+        [FromForm] string? paymentMethod = null,
+        [FromForm] string? reference = null,
+        [FromForm] string? notes = null,
+        IFormFile? attachmentFile = null,
+        CancellationToken ct = default)
+    {
+        var dto = new RegisterSupplierPaymentDto
+        {
+            Amount = amount,
+            PaymentDate = DateOnly.TryParse(paymentDate, out var pd) ? pd : DateOnly.FromDateTime(DateTime.UtcNow),
+            PaymentMethod = paymentMethod,
+            Reference = reference,
+            Notes = notes
+        };
+        await using var stream = attachmentFile is { Length: > 0 } ? attachmentFile.OpenReadStream() : null;
+        return Ok(await _service.RegisterPaymentAsync(invoiceId, dto, stream, attachmentFile?.FileName, ct));
+    }
 
     // ── Documents ────────────────────────────────────────────────────────────────
 
@@ -89,7 +145,7 @@ public class SupplierOrdersController : ControllerBase
         => Ok(await _service.GetDocumentsAsync(id, ct));
 
     [HttpPost("{id:long}/documents")]
-    [RequestSizeLimit(20 * 1024 * 1024)] // 20 MB
+    [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<ActionResult<SupplierOrderDocumentDto>> UploadDocument(
         long id,
         IFormFile file,
@@ -109,5 +165,12 @@ public class SupplierOrdersController : ControllerBase
     {
         await _service.DeleteDocumentAsync(documentId, ct);
         return NoContent();
+    }
+
+    [HttpPost("{id:long}/send-email")]
+    public async Task<IActionResult> SendByEmail(long id, [FromBody] SendOrderEmailDto dto, CancellationToken ct)
+    {
+        await _service.SendOrderByEmailAsync(id, dto.RecipientEmail, ct);
+        return Ok(new { message = "Bon de commande envoyé par email." });
     }
 }

@@ -12,11 +12,13 @@ namespace LabMedis.Infrastructure.Services;
 public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrderService
 {
     private readonly IFileStorageService _fileStorage;
+    private readonly IEmailService _emailService;
 
-    public SupplierOrderService(AppDbContext dbContext, IFileStorageService fileStorage)
+    public SupplierOrderService(AppDbContext dbContext, IFileStorageService fileStorage, IEmailService emailService)
         : base(dbContext)
     {
         _fileStorage = fileStorage;
+        _emailService = emailService;
     }
 
     // ── Queries ─────────────────────────────────────────────────────────────────
@@ -27,6 +29,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         var q = DbSet
             .Include(o => o.Supplier)
             .Include(o => o.Lines)
+            .Include(o => o.SupplierInvoice)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<SupplierOrderStatus>(status, true, out var s))
@@ -73,6 +76,29 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             .ToListAsync(ct);
 
         return docs.Select(d => ToDocumentDto(d)).ToList();
+    }
+
+    public async Task<IReadOnlyList<PurchaseSummaryDto>> GetReceptionsAsync(long orderId, CancellationToken ct = default)
+    {
+        var purchases = await DbContext.Purchases
+            .Include(p => p.Supplier)
+            .Include(p => p.Lines)
+            .Include(p => p.Charges)
+            .Where(p => p.SupplierOrderId == orderId)
+            .OrderByDescending(p => p.ArrivalDate)
+            .ToListAsync(ct);
+
+        return purchases.Select(ToPurchaseSummaryDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<PurchaseChargeDto>> GetPurchaseChargesAsync(long purchaseId, CancellationToken ct = default)
+    {
+        var charges = await DbContext.PurchaseCharges
+            .Where(c => c.PurchaseId == purchaseId)
+            .OrderBy(c => c.ChargeDate)
+            .ToListAsync(ct);
+
+        return charges.Select(ToChargeDto).ToList();
     }
 
     // ── Mutations ────────────────────────────────────────────────────────────────
@@ -206,7 +232,6 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             dto.Origin?.Trim(),
             dto.ExpectedShippingDate);
 
-        // Update unit FOB prices per line
         foreach (var lineInput in dto.Lines)
         {
             var line = order.Lines.FirstOrDefault(l => l.Id == lineInput.LineId);
@@ -275,7 +300,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         invoice.SetExplicitAmounts(dto.TotalAmountXof, dto.DiscountAmountXof, dto.AdvanceAmountXof);
 
         DbContext.SupplierInvoices.Add(invoice);
-        await DbContext.SaveChangesAsync(ct); // obtenir invoice.Id
+        await DbContext.SaveChangesAsync(ct);
 
         var supplierName = order.Supplier?.Name ?? "";
         await PostInvoiceJournalEntryAsync(invoice, supplierName, ct);
@@ -286,7 +311,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
 
-    public async Task<SupplierInvoiceDto> RegisterPaymentAsync(long invoiceId, RegisterSupplierPaymentDto dto, CancellationToken ct = default)
+    public async Task<SupplierInvoiceDto> RegisterPaymentAsync(long invoiceId, RegisterSupplierPaymentDto dto, Stream? attachmentStream, string? attachmentFileName, CancellationToken ct = default)
     {
         var invoice = await DbContext.SupplierInvoices
             .Include(i => i.Supplier)
@@ -295,7 +320,94 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
         invoice.RegisterPayment(dto.Amount);
         await DbContext.SaveChangesAsync(ct);
-        return ToInvoiceDto(invoice);
+
+        string? attachmentPath = null;
+        if (attachmentStream is not null && !string.IsNullOrEmpty(attachmentFileName))
+        {
+            (attachmentPath, _) = await _fileStorage.SaveAsync(attachmentStream, "supplier-invoice-payments", attachmentFileName, ct);
+        }
+
+        var payment = new SupplierInvoicePayment
+        {
+            SupplierInvoiceId = invoice.Id,
+            Amount = dto.Amount,
+            PaymentDate = dto.PaymentDate == default ? DateOnly.FromDateTime(DateTime.UtcNow) : dto.PaymentDate,
+            PaymentMethod = dto.PaymentMethod,
+            Reference = dto.Reference,
+            Notes = dto.Notes,
+            AttachmentFileName = attachmentFileName,
+            AttachmentPath = attachmentPath
+        };
+        DbContext.SupplierInvoicePayments.Add(payment);
+
+        // Post accounting entry (JT – Journal de Trésorerie)
+        // D: 401 Fournisseur / C: 521 Trésorerie
+        var acc401 = await FindAccountAsync("401", ct);
+        var acc521 = await FindAccountAsync("521", ct) ?? await FindAccountAsync("5211", ct);
+
+        if (acc401 is not null && acc521 is not null)
+        {
+            var entryDate = payment.PaymentDate.ToDateTime(TimeOnly.MinValue);
+            var entry = new JournalEntry
+            {
+                JournalCode = "JT",
+                EntryDate   = entryDate,
+                Reference   = $"REG-{invoice.InvoiceReference}",
+                Description = $"Règlement facture fournisseur {invoice.Supplier?.Name} — {invoice.InvoiceReference}",
+                SourceType  = "SupplierInvoicePayment",
+                SourceId    = invoice.Id,
+                IsPosted    = false
+            };
+            entry.AddLine(new JournalLine { AccountId = acc401.Id, Label = $"Règlement {invoice.InvoiceReference}", DebitAmount = dto.Amount, CreditAmount = 0, SupplierId = invoice.SupplierId });
+            entry.AddLine(new JournalLine { AccountId = acc521.Id, Label = $"Règlement {invoice.InvoiceReference}", DebitAmount = 0, CreditAmount = dto.Amount });
+            entry.Validate();
+            DbContext.JournalEntries.Add(entry);
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+        return await GetInvoiceByIdAsync(invoiceId, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<PagedResult<SupplierInvoiceDto>> GetAllInvoicesAsync(int page, int size, string? status, long? supplierId = null, CancellationToken ct = default)
+    {
+        var skip = (page - 1) * size;
+        var query = DbContext.SupplierInvoices
+            .Include(i => i.Supplier)
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(status))
+            query = query.Where(i => i.Status.ToString() == status);
+        if (supplierId.HasValue)
+            query = query.Where(i => i.SupplierId == supplierId.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(i => i.InvoiceDate)
+            .Skip(skip).Take(size)
+            .ToListAsync(ct);
+
+        var ids = items.Select(i => i.Id).ToList();
+        var payments = await DbContext.SupplierInvoicePayments
+            .Where(p => ids.Contains(p.SupplierInvoiceId))
+            .ToListAsync(ct);
+
+        var dtos = items.Select(i => ToInvoiceDto(i, payments.Where(p => p.SupplierInvoiceId == i.Id))).ToList();
+        return new PagedResult<SupplierInvoiceDto>(dtos, total, page, size);
+    }
+
+    public async Task<SupplierInvoiceDto?> GetInvoiceByIdAsync(long invoiceId, CancellationToken ct = default)
+    {
+        var invoice = await DbContext.SupplierInvoices
+            .Include(i => i.Supplier)
+            .FirstOrDefaultAsync(i => i.Id == invoiceId, ct);
+        if (invoice is null) return null;
+
+        var payments = await DbContext.SupplierInvoicePayments
+            .Where(p => p.SupplierInvoiceId == invoiceId)
+            .OrderBy(p => p.PaymentDate)
+            .ToListAsync(ct);
+
+        return ToInvoiceDto(invoice, payments);
     }
 
     public async Task<SupplierOrderDto> ReceiveGoodsAsync(long id, ReceiveGoodsDto dto, CancellationToken ct = default)
@@ -309,9 +421,9 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             .FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
 
-        order.MarkGoodsReceived();
+        order.MarkGoodsReceived();  // → EnCoursDeRéception (allows multiple calls)
 
-        // Générer la référence d'arrivage
+        // Generate arrivage reference
         var year = DateTime.UtcNow.Year;
         var arrivalPrefix = $"ARR-{year}-";
         var existingRefs = await DbContext.Purchases
@@ -329,20 +441,22 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             Reference = arrivalRef,
             PurchaseDate = dto.ArrivalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
             ArrivalDate = dto.ArrivalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            SupplierOrderId = order.Id,
+            TransportMode = dto.TransportMode?.Trim() ?? string.Empty,
             SupplierId = order.SupplierId,
             ContainerReference = order.ContainerReference,
             Notes = dto.Notes?.Trim()
         };
         purchase.SetExchangeRate(dto.ExchangeRateToXof);
-        purchase.SetCoefficients(
-            dto.CommissionCoefficient, dto.FreightCoefficient,
-            dto.TransitCoefficient, dto.TransferFeesCoefficient,
-            dto.DefaultMarginCoefficient);
 
         DbContext.Purchases.Add(purchase);
-        await DbContext.SaveChangesAsync(ct); // obtenir purchase.Id
+        await DbContext.SaveChangesAsync(ct);  // get purchase.Id
 
-        decimal totalCostXof = 0m;
+        decimal totalFobXof = 0m;
+        decimal totalLostFobXof = 0m;
+
+        // Keep (purchaseLine, lineInput) pairs for final price assignment
+        var linePairs = new List<(PurchaseLine Line, ReceiveGoodsLineDto Input)>();
 
         foreach (var lineInput in dto.Lines)
         {
@@ -353,42 +467,185 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
                 .FirstOrDefaultAsync(p => p.Id == orderLine.ProductId, ct)
                 ?? throw new DomainException($"Produit introuvable (Id={orderLine.ProductId}).");
 
+            var unitsPerCarton = lineInput.UnitsPerCarton > 0 ? lineInput.UnitsPerCarton : 1;
+            var lostCartons = Math.Max(0, lineInput.QuantityLostCartons);
+
             var purchaseLine = purchase.AddLine(
                 product,
                 lineInput.LotNumber,
-                lineInput.Quantity,
-                lineInput.UnitFobPrice,
+                lineInput.QuantityCartons,
+                lostCartons,
+                unitsPerCarton,
+                lineInput.UnitFobPricePerCarton,
                 lineInput.ExpirationDate,
-                lineInput.TargetSellingPriceHt);
-
-            totalCostXof += purchaseLine.UnitCostPriceXof * lineInput.Quantity;
+                lineInput.MarginRate > 0 ? lineInput.MarginRate : 0.10m);
 
             DbContext.PurchaseLines.Add(purchaseLine);
-            await DbContext.SaveChangesAsync(ct); // obtenir purchaseLine.Id
+            await DbContext.SaveChangesAsync(ct);  // get purchaseLine.Id
 
-            // Mouvement de stock entrant (QuantityRemaining est déjà initialisé dans AddLine)
-            DbContext.StockMovements.Add(new StockMovement
+            linePairs.Add((purchaseLine, lineInput));
+
+            var lineFobXof = purchaseLine.UnitPurchasePriceXof * purchaseLine.Quantity;
+            totalFobXof += lineFobXof;
+            totalLostFobXof += purchaseLine.UnitPurchasePriceXof * lostCartons;
+
+            // Stock entry: only good units enter the warehouse
+            if (purchaseLine.GoodUnitsReceived > 0)
             {
-                ProductId = product.Id,
-                WarehouseId = product.WarehouseId,
-                PurchaseLineId = purchaseLine.Id,
-                MovementType = StockMovementType.PurchaseEntry,
-                Quantity = lineInput.Quantity,
-                MovementDate = DateTime.UtcNow,
-                Reference = arrivalRef
-            });
+                DbContext.StockMovements.Add(new StockMovement
+                {
+                    ProductId = product.Id,
+                    WarehouseId = product.WarehouseId,
+                    PurchaseLineId = purchaseLine.Id,
+                    MovementType = StockMovementType.PurchaseEntry,
+                    Quantity = purchaseLine.GoodUnitsReceived,
+                    MovementDate = DateTime.UtcNow,
+                    Reference = arrivalRef
+                });
+            }
         }
 
         await DbContext.SaveChangesAsync(ct);
 
-        if (totalCostXof > 0)
+        // Accounting: D:371 Marchandises / C:601 Achats — total FOB (all cartons paid)
+        if (totalFobXof > 0)
         {
             await PostGoodsReceptionJournalEntryAsync(
-                purchase, totalCostXof, order.Supplier?.Name ?? "", arrivalRef, ct);
-            await DbContext.SaveChangesAsync(ct);
+                purchase, totalFobXof, order.Supplier?.Name ?? "", arrivalRef, ct);
         }
 
+        // Accounting: D:6583 Pertes / C:371 Marchandises — value of damaged/lost goods
+        if (totalLostFobXof > 0)
+        {
+            await PostLossJournalEntryAsync(
+                purchase, totalLostFobXof, order.Supplier?.Name ?? "", arrivalRef, ct);
+        }
+
+        // Pricing structure charges: Commission → Fret → Transit → Frais transfert
+        // Each charge cascades on top of the previous: PA × (1+comm) × (1+fret) × (1+trans) × (1+transf) = PR
+        await AddPricingChargesAsync(purchase, dto, totalFobXof, arrivalRef, order.Supplier?.Name ?? "", ct);
+
+        // After all charges, RecalculateCosts() has set UnitCostPriceXof (= PR per unit) on each line.
+        // Now set the final selling price per line.
+        foreach (var (pLine, lineInput) in linePairs)
+        {
+            pLine.SetFinalSellingPrice(lineInput.FixedSellingPriceHt);
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
+    private async Task AddPricingChargesAsync(
+        Purchase purchase, ReceiveGoodsDto dto, decimal totalFobXof,
+        string arrivalRef, string supplierName, CancellationToken ct)
+    {
+        if (totalFobXof <= 0) return;
+
+        var chargeDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Running base for cascading rates
+        var runningBase = totalFobXof;
+
+        var charges = new[]
+        {
+            ("Commissions", "6342", dto.CommissionRate, "Commissions promo fournisseur"),
+            ("Fret",        "6241", dto.FreightRate,    "Frais de fret"),
+            ("Transit",     "6248", dto.TransitRate,    "Frais de transit"),
+            ("FraisTransf", "6288", dto.TransferRate,   "Frais de transfert"),
+        };
+
+        foreach (var (chargeType, debitCode, rate, description) in charges)
+        {
+            if (rate <= 0) continue;
+
+            var amount = Math.Round(runningBase * rate, 2);
+            if (amount <= 0) continue;
+
+            var charge = new PurchaseCharge
+            {
+                PurchaseId = purchase.Id,
+                ChargeType = chargeType,
+                Description = $"{description} — {arrivalRef}",
+                AmountXof = amount,
+                ChargeDate = chargeDate,
+                Reference = $"PX-{arrivalRef}",
+                DebitAccountCode = debitCode,
+                CreditAccountCode = "401",
+                Notes = $"Calculé automatiquement : {rate:P0} sur {runningBase:N0} XOF"
+            };
+
+            // AddCharge adds to _charges + triggers RecalculateCosts(); EF Core detects the new
+            // entity in the tracked collection and will INSERT it on the next SaveChanges.
+            // Do NOT also call DbContext.PurchaseCharges.Add(charge) — that would cause EF Core
+            // relationship fixup to add the charge to _charges a second time, doubling all charges
+            // in RecalculateCosts() and making UnitCostPriceXof ~2× too high.
+            purchase.AddCharge(charge);
+            await DbContext.SaveChangesAsync(ct);  // saves charge (gets Id) + updated line costs
+
+            var journalEntry = await PostChargeJournalEntryAsync(purchase, charge, ct);
+            if (journalEntry is not null)
+            {
+                charge.JournalEntryId = journalEntry.Id;
+                await DbContext.SaveChangesAsync(ct);
+            }
+
+            // Cascade: next charge applies on the running total including this one
+            runningBase += amount;
+        }
+    }
+
+    public async Task<SupplierOrderDto> CloseReceptionAsync(long id, CancellationToken ct = default)
+    {
+        var order = await DbSet.FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
+
+        order.CloseReception();
+        await DbContext.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<PurchaseChargeDto> AddPurchaseChargeAsync(
+        long purchaseId, AddPurchaseChargeDto dto, CancellationToken ct = default)
+    {
+        var purchase = await DbContext.Purchases
+            .Include(p => p.Lines)
+            .Include(p => p.Charges)
+            .FirstOrDefaultAsync(p => p.Id == purchaseId, ct)
+            ?? throw new DomainException($"Arrivage introuvable (Id={purchaseId}).");
+
+        if (dto.AmountXof <= 0)
+            throw new DomainException("Le montant de la charge doit être strictement positif.");
+
+        var charge = new PurchaseCharge
+        {
+            PurchaseId = purchaseId,
+            ChargeType = dto.ChargeType.Trim(),
+            Description = dto.Description.Trim(),
+            AmountXof = dto.AmountXof,
+            ChargeDate = dto.ChargeDate,
+            Reference = dto.Reference?.Trim(),
+            DebitAccountCode = dto.DebitAccountCode.Trim(),
+            CreditAccountCode = dto.CreditAccountCode.Trim(),
+            Notes = dto.Notes?.Trim()
+        };
+
+        DbContext.PurchaseCharges.Add(charge);
+        await DbContext.SaveChangesAsync(ct);  // get charge.Id
+
+        // Post the journal entry for this charge
+        var journalEntry = await PostChargeJournalEntryAsync(purchase, charge, ct);
+        if (journalEntry is not null)
+        {
+            charge.JournalEntryId = journalEntry.Id;
+        }
+
+        // Add charge to purchase and recalculate unit costs
+        purchase.AddCharge(charge);
+        await DbContext.SaveChangesAsync(ct);
+
+        return ToChargeDto(charge);
     }
 
     public async Task<SupplierOrderDocumentDto> UploadDocumentAsync(
@@ -427,17 +684,13 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
     // ── Private helpers ──────────────────────────────────────────────────────────
 
-    // ── Écritures comptables ─────────────────────────────────────────────────────
-
     private async Task<ChartAccount?> FindAccountAsync(string code, CancellationToken ct)
         => await DbContext.ChartAccounts.FirstOrDefaultAsync(a => a.Code == code, ct);
 
     private async Task PostInvoiceJournalEntryAsync(
         SupplierInvoice invoice, string supplierName, CancellationToken ct)
     {
-        // D: 601 Achats de marchandises / C: 401 Fournisseurs
-        var achatAccount = await FindAccountAsync("601", ct)
-            ?? await FindAccountAsync("6011", ct);
+        var achatAccount = await FindAccountAsync("601", ct) ?? await FindAccountAsync("6011", ct);
         var fournisseurAccount = await FindAccountAsync("401", ct);
 
         if (achatAccount is null || fournisseurAccount is null) return;
@@ -478,12 +731,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     private async Task PostAdvanceJournalEntryAsync(
         SupplierInvoice invoice, string supplierName, CancellationToken ct)
     {
-        // D: 4094 Fournisseurs - avances / C: 521 Banque
-        var avanceAccount = await FindAccountAsync("4094", ct);
-        var banqueAccount = await FindAccountAsync("521", ct)
-            ?? await FindAccountAsync("5211", ct);
+        // D: 401 Fournisseur (avance réduit la dette fournisseur) / C: 521 Banque
+        var fournisseurAccount = await FindAccountAsync("401", ct);
+        var banqueAccount = await FindAccountAsync("521", ct) ?? await FindAccountAsync("5211", ct);
 
-        if (avanceAccount is null || banqueAccount is null) return;
+        if (fournisseurAccount is null || banqueAccount is null) return;
 
         var advXof = invoice.AdvanceAmountXof;
         var entry = new JournalEntry
@@ -499,8 +751,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
         entry.AddLine(new JournalLine
         {
-            AccountId = avanceAccount.Id,
-            Label = $"Avance fournisseur {supplierName}",
+            AccountId = fournisseurAccount.Id,
+            Label = $"Avance fournisseur {supplierName} / {invoice.InvoiceReference}",
             DebitAmount = advXof,
             CreditAmount = 0m,
             SupplierId = invoice.SupplierId
@@ -508,7 +760,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         entry.AddLine(new JournalLine
         {
             AccountId = banqueAccount.Id,
-            Label = $"Règlement avance {supplierName}",
+            Label = $"Paiement avance {supplierName}",
             DebitAmount = 0m,
             CreditAmount = advXof,
             SupplierId = invoice.SupplierId
@@ -519,9 +771,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     }
 
     private async Task PostGoodsReceptionJournalEntryAsync(
-        Purchase purchase, decimal totalCostXof, string supplierName, string arrivalRef, CancellationToken ct)
+        Purchase purchase, decimal totalFobXof, string supplierName, string arrivalRef, CancellationToken ct)
     {
-        // D: 371 Marchandises (Stock) / C: 601 Achats — entrée physique en stock
         var stockAccount = await FindAccountAsync("371", ct)
             ?? await FindAccountAsync("370", ct)
             ?? await FindAccountAsync("37", ct);
@@ -544,8 +795,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         entry.AddLine(new JournalLine
         {
             AccountId = stockAccount.Id,
-            Label = $"Entrée stock — {supplierName}",
-            DebitAmount = totalCostXof,
+            Label = $"Entrée stock — {supplierName} ({arrivalRef})",
+            DebitAmount = totalFobXof,
             CreditAmount = 0m,
             SupplierId = purchase.SupplierId
         });
@@ -554,12 +805,99 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             AccountId = achatAccount.Id,
             Label = $"Contrepartie achats — {arrivalRef}",
             DebitAmount = 0m,
-            CreditAmount = totalCostXof,
+            CreditAmount = totalFobXof,
             SupplierId = purchase.SupplierId
         });
 
         entry.Validate();
         DbContext.JournalEntries.Add(entry);
+    }
+
+    private async Task PostLossJournalEntryAsync(
+        Purchase purchase, decimal lossAmountXof, string supplierName, string arrivalRef, CancellationToken ct)
+    {
+        // D: 6583 Pertes sur marchandises / C: 371 Marchandises
+        var pertesAccount = await FindAccountAsync("6583", ct)
+            ?? await FindAccountAsync("658", ct)
+            ?? await FindAccountAsync("65", ct);
+        var stockAccount = await FindAccountAsync("371", ct)
+            ?? await FindAccountAsync("370", ct);
+
+        if (pertesAccount is null || stockAccount is null) return;
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "OD",
+            EntryDate = DateTime.UtcNow,
+            Reference = $"PERTE-{arrivalRef}",
+            Description = $"Pertes sur marchandises — {supplierName} ({arrivalRef})",
+            SourceType = "PurchaseLoss",
+            SourceId = purchase.Id,
+            IsPosted = true
+        };
+
+        entry.AddLine(new JournalLine
+        {
+            AccountId = pertesAccount.Id,
+            Label = $"Pertes arrivage {arrivalRef} — {supplierName}",
+            DebitAmount = lossAmountXof,
+            CreditAmount = 0m,
+            SupplierId = purchase.SupplierId
+        });
+        entry.AddLine(new JournalLine
+        {
+            AccountId = stockAccount.Id,
+            Label = $"Sortie stock pertes {arrivalRef}",
+            DebitAmount = 0m,
+            CreditAmount = lossAmountXof,
+            SupplierId = purchase.SupplierId
+        });
+
+        entry.Validate();
+        DbContext.JournalEntries.Add(entry);
+    }
+
+    private async Task<JournalEntry?> PostChargeJournalEntryAsync(
+        Purchase purchase, PurchaseCharge charge, CancellationToken ct)
+    {
+        var debitAccount = await FindAccountAsync(charge.DebitAccountCode, ct);
+        var creditAccount = await FindAccountAsync(charge.CreditAccountCode, ct);
+
+        if (debitAccount is null || creditAccount is null) return null;
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "OD",
+            EntryDate = charge.ChargeDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            Reference = charge.Reference ?? $"CHG-{purchase.Reference}",
+            Description = $"{charge.ChargeType} — {charge.Description} ({purchase.Reference})",
+            SourceType = "PurchaseCharge",
+            SourceId = purchase.Id,
+            IsPosted = true
+        };
+
+        entry.AddLine(new JournalLine
+        {
+            AccountId = debitAccount.Id,
+            Label = charge.Description,
+            DebitAmount = charge.AmountXof,
+            CreditAmount = 0m,
+            SupplierId = purchase.SupplierId
+        });
+        entry.AddLine(new JournalLine
+        {
+            AccountId = creditAccount.Id,
+            Label = $"Règlement {charge.ChargeType.ToLower()} — {purchase.Reference}",
+            DebitAmount = 0m,
+            CreditAmount = charge.AmountXof,
+            SupplierId = purchase.SupplierId
+        });
+
+        entry.Validate();
+        DbContext.JournalEntries.Add(entry);
+        await DbContext.SaveChangesAsync(ct);
+
+        return entry;
     }
 
     private async Task<string> NextReferenceAsync(CancellationToken ct)
@@ -595,6 +933,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         o.Currency,
         o.Lines.Count,
         o.Notes,
+        o.SupplierInvoice?.InvoiceReference,
+        o.SupplierInvoice?.Status.ToString(),
+        o.SupplierInvoice?.NetAmountXof,
+        o.SupplierInvoice?.AmountPaid,
+        o.SupplierInvoice?.BalanceDue,
         o.CreatedAt,
         o.UpdatedAt);
 
@@ -629,7 +972,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         r.RejectedAt,
         r.Reason);
 
-    private static SupplierInvoiceDto ToInvoiceDto(SupplierInvoice i) => new(
+    private SupplierInvoiceDto ToInvoiceDto(SupplierInvoice i, IEnumerable<SupplierInvoicePayment>? payments = null) => new(
         i.Id,
         i.SupplierOrderId,
         i.SupplierId,
@@ -650,6 +993,12 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         i.AmountPaid,
         i.BalanceDue,
         i.Notes,
+        (payments ?? []).Select(p => new SupplierInvoicePaymentDto(
+            p.Id, p.SupplierInvoiceId, p.Amount, p.PaymentDate,
+            p.PaymentMethod, p.Reference, p.Notes,
+            p.AttachmentFileName,
+            p.AttachmentPath is null ? null : _fileStorage.GetPublicUrl(p.AttachmentPath),
+            p.CreatedAt)).ToList(),
         i.CreatedAt);
 
     private static SupplierOrderLineDto ToLineDto(SupplierOrderLine l) => new(
@@ -662,6 +1011,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         l.Quantity,
         l.OrderUnit,
         l.UnitsPerCarton,
+        l.Product?.Packaging?.UnitsPerPackaging,
         l.UnitFobPrice);
 
     private SupplierOrderDocumentDto ToDocumentDto(SupplierOrderDocument d) => new(
@@ -671,4 +1021,69 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         _fileStorage.GetPublicUrl(d.FilePath),
         d.FileSize,
         d.CreatedAt);
+
+    private static PurchaseSummaryDto ToPurchaseSummaryDto(Purchase p) => new(
+        p.Id,
+        p.Reference,
+        DateOnly.FromDateTime(p.ArrivalDate ?? p.PurchaseDate),
+        p.TransportMode,
+        p.SupplierId,
+        p.Supplier?.Name ?? "",
+        p.ContainerReference,
+        p.TotalFobXof,
+        p.TotalChargesXof,
+        p.TotalGoodUnits,
+        p.TotalLostCartons,
+        p.Lines.Count,
+        p.Notes,
+        p.CreatedAt,
+        p.Charges.Select(ToChargeDto).ToList());
+
+    private static PurchaseChargeDto ToChargeDto(PurchaseCharge c) => new(
+        c.Id,
+        c.PurchaseId,
+        c.ChargeType,
+        c.Description,
+        c.AmountXof,
+        c.ChargeDate,
+        c.Reference,
+        c.DebitAccountCode,
+        c.CreditAccountCode,
+        c.JournalEntryId,
+        c.Notes,
+        c.CreatedAt);
+
+    public async Task SendOrderByEmailAsync(long orderId, string? recipientEmail, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.Supplier)
+            .Include(o => o.Lines)
+                .ThenInclude(l => l.Product)
+                    .ThenInclude(p => p!.Packaging)
+            .Include(o => o.Lines)
+                .ThenInclude(l => l.Product)
+                    .ThenInclude(p => p!.Dosage)
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new DomainException($"Commande introuvable (Id={orderId}).");
+
+        var toEmail = string.IsNullOrWhiteSpace(recipientEmail) ? order.Supplier?.Email : recipientEmail.Trim();
+        if (string.IsNullOrEmpty(toEmail))
+            throw new DomainException("Aucun email destinataire — renseignez l'email du fournisseur ou saisissez un destinataire.");
+
+        var lineData = order.Lines.Select(l => (
+            Label: $"{l.Product?.Designation ?? "—"}{(l.Product?.Packaging?.Name != null ? $" ({l.Product.Packaging.Name})" : "")}",
+            Qty: l.Quantity,
+            Unit: l.OrderUnit
+        ));
+
+        var html = EmailTemplateService.BuildPurchaseOrderEmail(
+            order.Supplier?.Name ?? "—",
+            order.Reference,
+            DateOnly.FromDateTime(order.OrderDate),
+            order.Currency,
+            lineData,
+            order.Notes);
+
+        await _emailService.SendEmailAsync(toEmail, $"Bon de commande {order.Reference} — LabMedis", html);
+    }
 }

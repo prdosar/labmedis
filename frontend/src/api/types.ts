@@ -16,6 +16,7 @@ export interface TokenResponse {
   userName: string
   email: string
   fullName: string | null
+  mustChangePassword: boolean
   roles: string[]
   expiresAt: string
 }
@@ -33,7 +34,7 @@ export interface SimpleEntity {
 export type CategoryDto = SimpleEntity
 export type ProductFormDto = SimpleEntity
 export type DosageDto = SimpleEntity
-export type PackagingDto = SimpleEntity
+export interface PackagingDto extends SimpleEntity { unitsPerPackaging: number }
 export interface CountryDto extends SimpleEntity { isoCode: string | null }
 export type CustomsRegimeDto = SimpleEntity
 export type TransportTypeDto = SimpleEntity
@@ -216,6 +217,7 @@ export interface ProductDto {
   dosageName: string | null
   packagingId: number | null
   packagingName: string | null
+  packagingUnitsPerPackaging: number | null
   originCountryId: number | null
   originCountryName: string | null
   customsRegimeId: number | null
@@ -240,6 +242,8 @@ export interface ProductLotDto {
   unitPurchasePriceXof: number
   unitCostPriceXof: number
   targetSellingPriceHt: number
+  marginRate: number
+  calculatedSellingPriceHt: number
 }
 
 export interface ProductInvoiceLineDto {
@@ -279,15 +283,63 @@ export interface ProductHistoryDto {
 
 export interface PurchaseLineDto {
   id: number
+  purchaseId: number
   productId: number
   productCode: string | null
   productDesignation: string | null
-  lotNumber: string | null
-  expiryDate: string | null
-  quantity: number
+  lotNumber: string
+  expirationDate: string | null
+  quantityCartons: number
+  quantityLostCartons: number
+  unitsPerCarton: number
+  goodUnitsReceived: number
+  quantityRemaining: number
+  unitPurchasePrice: number
   unitPurchasePriceXof: number
-  costPrice: number
-  sellingPrice: number
+  unitCostPriceXof: number
+  targetSellingPriceHt: number
+  transports: PurchaseLineTransportDto[]
+}
+
+export interface PurchaseLineTransportDto {
+  id: number
+  transportTypeId: number
+  transportTypeCode: string | null
+  transportTypeName: string | null
+  quantity: number
+}
+
+export interface PurchaseChargeDto {
+  id: number
+  purchaseId: number
+  chargeType: string
+  description: string
+  amountXof: number
+  chargeDate: string
+  reference: string | null
+  debitAccountCode: string
+  creditAccountCode: string
+  journalEntryId: number | null
+  notes: string | null
+  createdAt: string
+}
+
+export interface PurchaseSummaryDto {
+  id: number
+  reference: string
+  arrivalDate: string
+  transportMode: string
+  supplierId: number
+  supplierName: string
+  containerReference: string | null
+  totalFobXof: number
+  totalChargesXof: number
+  totalGoodUnits: number
+  totalLostCartons: number
+  lineCount: number
+  notes: string | null
+  createdAt: string
+  charges: PurchaseChargeDto[]
 }
 
 export interface PurchaseDto {
@@ -295,17 +347,18 @@ export interface PurchaseDto {
   reference: string
   purchaseDate: string
   arrivalDate: string | null
+  supplierOrderId: number | null
+  transportMode: string
   supplierId: number
   supplierName: string | null
   purchaseCurrency: number
   exchangeRateToXof: number
-  commissionCoefficient: number
-  freightCoefficient: number
-  transitCoefficient: number
-  transferFeesCoefficient: number
-  defaultMarginCoefficient: number
   containerReference: string | null
   notes: string | null
+  totalFobXof: number
+  totalChargesXof: number
+  totalGoodUnits: number
+  totalLostCartons: number
   lines: PurchaseLineDto[]
   createdAt: string
   updatedAt: string | null
@@ -326,6 +379,19 @@ export interface InvoiceLineDto {
   totalTtc: number
 }
 
+export interface InvoicePaymentDto {
+  id: number
+  invoiceId: number
+  amount: number
+  paymentDate: string
+  paymentMethod: string | null
+  reference: string | null
+  notes: string | null
+  attachmentFileName: string | null
+  attachmentUrl: string | null
+  createdAt: string
+}
+
 export interface InvoiceDto {
   id: number
   reference: string
@@ -341,6 +407,7 @@ export interface InvoiceDto {
   balanceDue: number
   notes: string | null
   lines: InvoiceLineDto[]
+  payments: InvoicePaymentDto[]
   createdAt: string
   updatedAt: string | null
 }
@@ -498,6 +565,10 @@ export interface ManualJournalEntryInput {
   attachmentFileName: string | null
   attachmentPath: string | null
   lines: ManualJournalLineInput[]
+  /** Rattacher cette OD à un arrivage → crée automatiquement une PurchaseCharge */
+  purchaseId?: number | null
+  /** Type de charge requis si purchaseId est renseigné */
+  chargeType?: string | null
 }
 
 // ─── SupplierOrder ───────────────────────────────────────────────────────────
@@ -512,6 +583,7 @@ export interface SupplierOrderLineDto {
   quantity: number
   orderUnit: string
   unitsPerCarton: number | null
+  packagingUnitsPerPackaging: number | null
   unitFobPrice: number | null
 }
 
@@ -529,6 +601,19 @@ export interface SupplierProformaRejectionDto {
   proformaReference: string
   rejectedAt: string
   reason: string
+  createdAt: string
+}
+
+export interface SupplierInvoicePaymentDto {
+  id: number
+  supplierInvoiceId: number
+  amount: number
+  paymentDate: string
+  paymentMethod: string | null
+  reference: string | null
+  notes: string | null
+  attachmentFileName: string | null
+  attachmentUrl: string | null
   createdAt: string
 }
 
@@ -553,6 +638,7 @@ export interface SupplierInvoiceDto {
   amountPaid: number
   balanceDue: number
   notes: string | null
+  payments: SupplierInvoicePaymentDto[]
   createdAt: string
 }
 
@@ -592,6 +678,11 @@ export interface SupplierOrderSummaryDto {
   currency: string
   lineCount: number
   notes: string | null
+  invoiceReference: string | null
+  invoiceStatus: string | null
+  invoiceTotalXof: number | null
+  invoiceAmountPaid: number | null
+  invoiceBalanceDue: number | null
   createdAt: string
   updatedAt: string | null
 }
@@ -604,5 +695,6 @@ export interface UserDto {
   email: string
   fullName: string | null
   isActive: boolean
+  mustChangePassword: boolean
   roles: string[]
 }

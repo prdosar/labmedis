@@ -15,5 +15,6 @@ public record InvoiceDto(
     decimal BalanceDue,
     string? Notes,
     IReadOnlyList<InvoiceLineDto> Lines,
+    IReadOnlyList<InvoicePaymentDto> Payments,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

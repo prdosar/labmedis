@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Edit2, Send, XCircle, Search, X, FileInput,
-  CheckCircle, AlertTriangle, FileText, Package,
+  CheckCircle, AlertTriangle, FileText, Package, Eye,
 } from 'lucide-react'
 import type { SupplierOrderSummaryDto } from '../../api/types'
 import { supplierOrdersApi } from '../../api/endpoints'
@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
   ProformaReçue: 'Proforma reçue',
   ProformaValidée: 'Proforma validée',
   FactureReçue: 'Facture reçue',
+  EnCoursDeRéception: 'En réception',
   Réceptionnée: 'Réceptionnée',
   Convertie: 'Convertie',
   Annulée: 'Annulée',
@@ -31,6 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
   ProformaReçue: 'bg-amber-50 text-amber-700 border border-amber-200',
   ProformaValidée: 'bg-violet-50 text-violet-700 border border-violet-200',
   FactureReçue: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  EnCoursDeRéception: 'bg-orange-50 text-orange-700 border border-orange-200',
   Réceptionnée: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   Convertie: 'bg-green-50 text-green-700 border border-green-200',
   Annulée: 'bg-red-50 text-red-500 border border-red-200',
@@ -38,13 +40,24 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUSES = [
   '', 'Brouillon', 'Envoyée', 'ProformaReçue',
-  'ProformaValidée', 'FactureReçue', 'Réceptionnée', 'Convertie', 'Annulée',
+  'ProformaValidée', 'FactureReçue', 'EnCoursDeRéception', 'Réceptionnée', 'Convertie', 'Annulée',
 ]
 
 const TERMINAL = new Set(['Réceptionnée', 'Convertie', 'Annulée'])
 
 const searchInputClass =
   'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+
+function fmtXof(n: number) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(n)
+}
+
+function invoiceStatusBadge(status: string | null) {
+  if (!status) return null
+  if (status === 'Réglée') return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Réglée</span>
+  if (status === 'PartReglée') return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Part. réglée</span>
+  return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Non réglée</span>
+}
 
 export function SupplierOrdersPage() {
   const { toast } = useToast()
@@ -237,6 +250,35 @@ export function SupplierOrdersPage() {
               <span className="text-sm text-gray-600">{r.lineCount} produit{r.lineCount > 1 ? 's' : ''}</span>
             ),
           },
+          {
+            key: 'invoiceTotal',
+            header: 'Montant facture',
+            width: 'w-40',
+            render: r => r.invoiceTotalXof != null ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold text-gray-900 text-xs">{fmtXof(r.invoiceTotalXof)}</span>
+                {invoiceStatusBadge(r.invoiceStatus)}
+              </div>
+            ) : <span className="text-gray-300 text-xs">—</span>,
+          },
+          {
+            key: 'invoicePaid',
+            header: 'Réglé',
+            width: 'w-32',
+            render: r => r.invoiceAmountPaid != null ? (
+              <span className="text-sm font-medium text-green-600">{fmtXof(r.invoiceAmountPaid)}</span>
+            ) : <span className="text-gray-300 text-xs">—</span>,
+          },
+          {
+            key: 'invoiceBalance',
+            header: 'Solde',
+            width: 'w-32',
+            render: r => r.invoiceBalanceDue != null ? (
+              <span className={`text-sm font-semibold ${r.invoiceBalanceDue > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                {fmtXof(r.invoiceBalanceDue)}
+              </span>
+            ) : <span className="text-gray-300 text-xs">—</span>,
+          },
         ]}
         actions={row => (
           <div className="flex items-center gap-1">
@@ -313,6 +355,17 @@ export function SupplierOrdersPage() {
               </button>
             )}
 
+            {/* EnCoursDeRéception: gérer les arrivages et charges */}
+            {row.status === 'EnCoursDeRéception' && (
+              <button
+                title="Gérer les arrivages / charges"
+                onClick={() => navigate(`/orders/suppliers/${row.id}/receptions`)}
+                className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+              >
+                <Package size={14} />
+              </button>
+            )}
+
             {/* Annuler: disponible tant que non terminal */}
             {!TERMINAL.has(row.status) && (
               <button
@@ -321,6 +374,17 @@ export function SupplierOrdersPage() {
                 className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               >
                 <XCircle size={14} />
+              </button>
+            )}
+
+            {/* Voir la facture fournisseur */}
+            {row.invoiceReference && (
+              <button
+                title="Voir la facture fournisseur"
+                onClick={() => navigate(`/invoices/suppliers?order=${row.id}`)}
+                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              >
+                <Eye size={14} />
               </button>
             )}
           </div>

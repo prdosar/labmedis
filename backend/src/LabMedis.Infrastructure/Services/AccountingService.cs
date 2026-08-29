@@ -127,6 +127,12 @@ public class AccountingService : BaseRepository<JournalEntry>, IAccountingServic
 
     public async Task<JournalEntryDto> PostManualEntryAsync(ManualJournalEntryInput input, CancellationToken ct = default)
     {
+        // Resolve account codes before saving (needed for PurchaseCharge if applicable)
+        var accountIds = input.Lines.Select(l => l.AccountId).Distinct().ToList();
+        var accountCodes = await DbContext.ChartAccounts
+            .Where(a => accountIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.Code, ct);
+
         var entry = new JournalEntry
         {
             JournalCode = input.JournalCode,
@@ -154,6 +160,43 @@ public class AccountingService : BaseRepository<JournalEntry>, IAccountingServic
         }
 
         await PostAsync(entry, ct);
+
+        // Optionally link this OD entry to a purchase arrivage (creates a PurchaseCharge)
+        if (input.PurchaseId.HasValue)
+        {
+            var purchase = await DbContext.Purchases
+                .Include(p => p.Lines)
+                .Include(p => p.Charges)
+                .FirstOrDefaultAsync(p => p.Id == input.PurchaseId, ct)
+                ?? throw new DomainException($"Arrivage introuvable (id={input.PurchaseId}).");
+
+            var totalAmount = input.Lines.Sum(l => l.DebitAmount);
+            var debitAccountId = input.Lines.FirstOrDefault(l => l.DebitAmount > 0)?.AccountId;
+            var creditAccountId = input.Lines.FirstOrDefault(l => l.CreditAmount > 0)?.AccountId;
+
+            var charge = new PurchaseCharge
+            {
+                PurchaseId = purchase.Id,
+                ChargeType = input.ChargeType ?? "Autres",
+                Description = input.Description,
+                AmountXof = totalAmount,
+                ChargeDate = DateOnly.FromDateTime(input.EntryDate),
+                Reference = input.Reference,
+                DebitAccountCode = debitAccountId.HasValue ? (accountCodes.GetValueOrDefault(debitAccountId.Value) ?? "") : "",
+                CreditAccountCode = creditAccountId.HasValue ? (accountCodes.GetValueOrDefault(creditAccountId.Value) ?? "") : "",
+                JournalEntryId = entry.Id,
+                Notes = null
+            };
+
+            DbContext.PurchaseCharges.Add(charge);
+            purchase.AddCharge(charge); // triggers RecalculateCosts()
+            await DbContext.SaveChangesAsync(ct);
+
+            // Update journal entry to reference the charge
+            entry.SourceType = "PurchaseCharge";
+            entry.SourceId = charge.Id;
+            await DbContext.SaveChangesAsync(ct);
+        }
 
         // Reload with navigations
         var saved = await DbContext.JournalEntries

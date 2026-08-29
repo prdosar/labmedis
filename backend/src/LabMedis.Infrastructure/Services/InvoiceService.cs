@@ -13,11 +13,13 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
 {
     private readonly ILogger<InvoiceService> _logger;
     private readonly IAccountingService _accounting;
+    private readonly IFileStorageService _fileStorage;
 
-    public InvoiceService(AppDbContext dbContext, ILogger<InvoiceService> logger, IAccountingService accounting) : base(dbContext)
+    public InvoiceService(AppDbContext dbContext, ILogger<InvoiceService> logger, IAccountingService accounting, IFileStorageService fileStorage) : base(dbContext)
     {
         _logger = logger;
         _accounting = accounting;
+        _fileStorage = fileStorage;
     }
 
     public async Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
@@ -31,13 +33,18 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
             .OrderByDescending(i => i.InvoiceDate)
             .Skip(skip).Take(size)
             .ToListAsync(cancellationToken);
-        return new PagedResult<InvoiceDto>(items.Select(ToDto).ToList(), total, page, size);
+        return new PagedResult<InvoiceDto>(items.Select(i => ToDto(i)).ToList(), total, page, size);
     }
 
     public async Task<InvoiceDto?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         var item = await LoadAggregateAsync(id, cancellationToken);
-        return item is null ? null : ToDto(item);
+        if (item is null) return null;
+        var payments = await DbContext.InvoicePayments
+            .Where(p => p.InvoiceId == id)
+            .OrderBy(p => p.PaymentDate)
+            .ToListAsync(cancellationToken);
+        return ToDto(item, payments);
     }
 
     public async Task<InvoiceDto> CreateAsync(InvoiceCreateDto dto, CancellationToken cancellationToken = default)
@@ -170,21 +177,44 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         return ToDto(invoice);
     }
 
-    public async Task<InvoiceDto?> RegisterPaymentAsync(long id, RegisterPaymentDto dto, CancellationToken cancellationToken = default)
+    public async Task<InvoiceDto?> RegisterPaymentAsync(long id, RegisterPaymentDto dto, Stream? attachmentStream, string? attachmentFileName, CancellationToken cancellationToken = default)
     {
         var invoice = await LoadAggregateAsync(id, cancellationToken);
         if (invoice is null) return null;
         invoice.RegisterPayment(dto.Amount);
         await UpdateAsync(invoice, cancellationToken);
 
+        string? attachmentPath = null;
+        string? savedFileName = null;
+        if (attachmentStream is not null && !string.IsNullOrEmpty(attachmentFileName))
+        {
+            (attachmentPath, savedFileName) = await _fileStorage.SaveAsync(attachmentStream, "invoice-payments", attachmentFileName, cancellationToken);
+            _ = savedFileName;
+        }
+
+        var payment = new InvoicePayment
+        {
+            InvoiceId = invoice.Id,
+            Amount = dto.Amount,
+            PaymentDate = dto.PaymentDate == default ? DateOnly.FromDateTime(DateTime.UtcNow) : dto.PaymentDate,
+            PaymentMethod = dto.PaymentMethod,
+            Reference = dto.Reference,
+            Notes = dto.Notes,
+            AttachmentFileName = attachmentFileName,
+            AttachmentPath = attachmentPath
+        };
+        DbContext.InvoicePayments.Add(payment);
+        await DbContext.SaveChangesAsync(cancellationToken);
+
         // Post accounting entry (JT – Journal de Trésorerie)
+        var entryDate = payment.PaymentDate.ToDateTime(TimeOnly.MinValue);
         var acc521  = await _accounting.RequireAccountAsync("521",  cancellationToken);
         var acc4111 = await _accounting.RequireAccountAsync("4111", cancellationToken);
 
         var entry = new JournalEntry
         {
             JournalCode = "JT",
-            EntryDate   = DateTime.UtcNow.Date,
+            EntryDate   = entryDate,
             Reference   = $"REG-{invoice.Reference}",
             Description = $"Règlement facture {invoice.Reference}",
             SourceType  = "InvoicePayment",
@@ -197,7 +227,7 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         await _accounting.PostAsync(entry, cancellationToken);
 
         _logger.LogInformation("Règlement enregistré sur facture Id={Id} Montant={Amount}", id, dto.Amount);
-        return ToDto(invoice);
+        return await GetByIdAsync(id, cancellationToken);
     }
 
     public async Task<InvoiceDto?> CancelAsync(long id, CancellationToken cancellationToken = default)
@@ -240,14 +270,22 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
             .Include(i => i.Lines).ThenInclude(l => l.DeliveryLines)
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
-    private static InvoiceDto ToDto(Invoice i) => new(
+    private InvoiceDto ToDto(Invoice i, IEnumerable<InvoicePayment>? payments = null) => new(
         i.Id, i.Reference, i.InvoiceDate, i.DueDate,
         i.CustomerId, i.Customer?.Name,
         i.Status.ToString(),
         i.SubtotalHt, i.TotalTva, i.TotalTtc, i.AmountPaid, i.BalanceDue,
         i.Notes,
         i.Lines.Select(ToLineDto).ToList(),
+        (payments ?? []).Select(p => ToPaymentDto(p)).ToList(),
         i.CreatedAt, i.UpdatedAt);
+
+    private InvoicePaymentDto ToPaymentDto(InvoicePayment p) => new(
+        p.Id, p.InvoiceId, p.Amount, p.PaymentDate,
+        p.PaymentMethod, p.Reference, p.Notes,
+        p.AttachmentFileName,
+        p.AttachmentPath is null ? null : _fileStorage.GetPublicUrl(p.AttachmentPath),
+        p.CreatedAt);
 
     private static InvoiceLineDto ToLineDto(InvoiceLine l) => new(
         l.Id, l.InvoiceId, l.ProductId,

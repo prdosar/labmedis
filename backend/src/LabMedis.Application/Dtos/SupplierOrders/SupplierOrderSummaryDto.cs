@@ -10,5 +10,10 @@ public record SupplierOrderSummaryDto(
     string Currency,
     int LineCount,
     string? Notes,
+    string? InvoiceReference,
+    string? InvoiceStatus,
+    decimal? InvoiceTotalXof,
+    decimal? InvoiceAmountPaid,
+    decimal? InvoiceBalanceDue,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

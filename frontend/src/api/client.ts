@@ -60,7 +60,22 @@ export const api = {
       body: JSON.stringify(body),
     }).then(handleResponse<T>)
   },
+  patch<T>(path: string, body: unknown): Promise<T> {
+    return fetch(`${BASE}${path}`, {
+      method: 'PATCH',
+      headers: buildHeaders(),
+      body: JSON.stringify(body),
+    }).then(handleResponse<T>)
+  },
   delete<T = void>(path: string): Promise<T> {
     return fetch(`${BASE}${path}`, { method: 'DELETE', headers: buildHeaders() }).then(handleResponse<T>)
+  },
+  postForm<T>(path: string, body: FormData): Promise<T> {
+    const token = getToken()
+    return fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body,
+    }).then(handleResponse<T>)
   },
 }

@@ -27,6 +27,7 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseLine> PurchaseLines => Set<PurchaseLine>();
     public DbSet<PurchaseLineTransport> PurchaseLineTransports => Set<PurchaseLineTransport>();
+    public DbSet<PurchaseCharge> PurchaseCharges => Set<PurchaseCharge>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
@@ -44,6 +45,8 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<SupplierOrderDocument> SupplierOrderDocuments => Set<SupplierOrderDocument>();
     public DbSet<SupplierProformaRejection> SupplierProformaRejections => Set<SupplierProformaRejection>();
     public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
+    public DbSet<SupplierInvoicePayment> SupplierInvoicePayments => Set<SupplierInvoicePayment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -89,6 +92,28 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
              .WithMany()
              .HasForeignKey(l => l.SupplierId)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── InvoicePayment ────────────────────────────────────────────
+        modelBuilder.Entity<InvoicePayment>(b =>
+        {
+            b.ToTable("invoice_payments");
+            b.Property(p => p.Amount).HasColumnType("numeric(18,2)");
+            b.HasOne(p => p.Invoice)
+             .WithMany()
+             .HasForeignKey(p => p.InvoiceId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── SupplierInvoicePayment ────────────────────────────────────
+        modelBuilder.Entity<SupplierInvoicePayment>(b =>
+        {
+            b.ToTable("supplier_invoice_payments");
+            b.Property(p => p.Amount).HasColumnType("numeric(18,2)");
+            b.HasOne(p => p.SupplierInvoice)
+             .WithMany()
+             .HasForeignKey(p => p.SupplierInvoiceId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
