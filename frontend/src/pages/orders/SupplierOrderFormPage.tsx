@@ -10,8 +10,8 @@ import { Button } from '../../components/ui/Button'
 import { ComboSelect, Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 
-// Grid template for order lines: product | qty | unit | boites/carton | delete
-const GRID_TPL = '1fr 5rem 7rem 7rem 2rem'
+// Grid template for order lines: product | qty | unit | boites/carton | total | delete
+const GRID_TPL = '1fr 5rem 7rem 7rem 6rem 2rem'
 
 interface LineInput {
   productId: string
@@ -220,25 +220,54 @@ export function SupplierOrderFormPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
-                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'left' }}>Désignations</th>
-                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center', width: '160px' }}>Quantités</th>
+                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'left' }}>Désignation</th>
+                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center', width: '120px' }}>Conditionnement</th>
+                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center', width: '100px' }}>Qté commandée</th>
+                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center', width: '100px' }}>Boîtes/carton</th>
+                <th style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center', width: '100px' }}>Total boîtes</th>
               </tr>
             </thead>
             <tbody>
               {validLines.map((line, idx) => {
                 const product = products.find(p => String(p.id) === line.productId)
-                const label = product
-                  ? `${product.designation}${product.packagingName ? ` (${product.packagingName})` : ''}${product.dosageName ? ` — ${product.dosageName}` : ''}`
+                const designation = product
+                  ? `${product.designation}${product.dosageName ? ` — ${product.dosageName}` : ''}`
                   : `Produit #${line.productId}`
-                const qtyLabel = `${Number(line.quantity).toLocaleString('fr-FR')} ${line.orderUnit === 'Carton' ? 'carton(s)' : 'boîte(s)'}`
+                const conditionnement = product?.packagingName ?? '—'
+                const qty = Number(line.quantity)
+                const upc = Number(line.unitsPerCarton)
+                const totalBoitesLine = line.orderUnit === 'Carton' && upc > 0
+                  ? qty * upc
+                  : line.orderUnit === 'Boite' ? qty : null
+                const qtyLabel = `${qty.toLocaleString('fr-FR')} ${line.orderUnit === 'Carton' ? 'carton(s)' : 'boîte(s)'}`
                 return (
                   <tr key={idx} style={{ backgroundColor: idx % 2 === 1 ? '#fafafa' : '#fff' }}>
-                    <td style={{ border: '1px solid #ccc', padding: '5px 8px' }}>{label}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '5px 8px' }}>{designation}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '5px 8px', textAlign: 'center' }}>{conditionnement}</td>
                     <td style={{ border: '1px solid #ccc', padding: '5px 8px', textAlign: 'center' }}>{qtyLabel}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '5px 8px', textAlign: 'center' }}>
+                      {line.orderUnit === 'Carton' && upc > 0 ? upc.toLocaleString('fr-FR') : '—'}
+                    </td>
+                    <td style={{ border: '1px solid #ccc', padding: '5px 8px', textAlign: 'center', fontWeight: 'bold' }}>
+                      {totalBoitesLine != null ? totalBoitesLine.toLocaleString('fr-FR') : '—'}
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
+            {/* Totaux */}
+            <tfoot>
+              <tr style={{ backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
+                <td colSpan={2} style={{ border: '1px solid #999', padding: '6px 8px' }}>Total</td>
+                <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>
+                  {totalCartons > 0 ? `${totalCartons % 1 === 0 ? totalCartons.toFixed(0) : totalCartons.toFixed(2)} carton(s)` : '—'}
+                </td>
+                <td style={{ border: '1px solid #999', padding: '6px 8px' }} />
+                <td style={{ border: '1px solid #999', padding: '6px 8px', textAlign: 'center' }}>
+                  {totalBoites > 0 ? `${totalBoites.toLocaleString('fr-FR')} boîte(s)` : '—'}
+                </td>
+              </tr>
+            </tfoot>
           </table>
 
           {notes && (
@@ -409,6 +438,7 @@ export function SupplierOrderFormPage() {
                 <span>Qté</span>
                 <span>Unité</span>
                 <span>Boîtes/carton</span>
+                <span>Total boîtes</span>
                 <span />
               </div>
 
@@ -460,6 +490,25 @@ export function SupplierOrderFormPage() {
                       placeholder="ex : 12"
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                     />
+
+                    {/* Total boîtes calculé */}
+                    {(() => {
+                      const qty = Number(line.quantity)
+                      const upc = Number(line.unitsPerCarton)
+                      const total = line.orderUnit === 'Carton' && upc > 0
+                        ? qty * upc
+                        : line.orderUnit === 'Boite'
+                          ? qty
+                          : null
+                      return (
+                        <div className="flex items-center h-9">
+                          {total != null
+                            ? <span className="text-sm font-semibold text-brand-700">{total.toLocaleString('fr-FR')} boîte{total > 1 ? 's' : ''}</span>
+                            : <span className="text-xs text-gray-300">—</span>
+                          }
+                        </div>
+                      )
+                    })()}
 
                     {/* Delete */}
                     <div className="py-1 flex justify-end">
