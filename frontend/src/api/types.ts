@@ -524,6 +524,33 @@ export interface SupplierOrderDocumentDto {
   uploadedAt: string
 }
 
+export interface SupplierProformaRejectionDto {
+  id: number
+  proformaReference: string
+  rejectedAt: string
+  reason: string
+  createdAt: string
+}
+
+export interface SupplierInvoiceDto {
+  id: number
+  supplierOrderId: number
+  supplierId: number
+  supplierName: string
+  invoiceReference: string
+  invoiceDate: string
+  dueDate: string | null
+  totalAmountForeign: number
+  currency: string
+  exchangeRateToXof: number
+  totalAmountXof: number
+  status: string
+  amountPaid: number
+  balanceDue: number
+  notes: string | null
+  createdAt: string
+}
+
 export interface SupplierOrderDto {
   id: number
   reference: string
@@ -544,6 +571,8 @@ export interface SupplierOrderDto {
   expectedShippingDate: string | null
   lines: SupplierOrderLineDto[]
   documents: SupplierOrderDocumentDto[]
+  proformaRejections: SupplierProformaRejectionDto[]
+  invoice: SupplierInvoiceDto | null
   createdAt: string
   updatedAt: string | null
 }

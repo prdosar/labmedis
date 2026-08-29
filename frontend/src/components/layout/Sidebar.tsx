@@ -5,10 +5,8 @@ import {
   Package,
   Truck,
   Users,
-  ShoppingCart,
   FileText,
   Send,
-  BarChart3,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -53,12 +51,7 @@ const ordersNav: NavItem[] = [
   { to: '/orders/suppliers', label: 'Commandes fournisseurs', icon: <Truck size={17} /> },
 ]
 
-const transactionNav: NavItem[] = [
-  { to: '/purchases', label: 'Achats', icon: <ShoppingCart size={17} /> },
-  { to: '/invoices', label: 'Factures', icon: <FileText size={17} /> },
-  { to: '/deliveries', label: 'Livraisons', icon: <Send size={17} /> },
-  { to: '/stock-movements', label: 'Mouvements de stock', icon: <BarChart3 size={17} /> },
-]
+const deliveryItem: NavItem = { to: '/deliveries', label: 'Livraisons', icon: <Send size={17} /> }
 
 const configNav: NavItem[] = [
   { to: '/config/categories', label: 'Catégories', icon: <Tag size={16} /> },
@@ -111,6 +104,55 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
       <div className="flex flex-col gap-0.5">
         {items.map(item => <NavItemLink key={item.to} item={item} />)}
       </div>
+    </div>
+  )
+}
+
+function InvoicesSection() {
+  const location = useLocation()
+  const isActive = location.pathname.startsWith('/invoices')
+  const [open, setOpen] = useState(isActive)
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+          ${isActive ? 'text-brand-600 bg-brand-50' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+      >
+        <span className="flex items-center gap-3">
+          <FileText size={17} className={isActive ? 'text-brand-500' : ''} />
+          Factures
+        </span>
+        {open
+          ? <ChevronDown size={14} className="text-gray-400" />
+          : <ChevronRight size={14} className="text-gray-400" />
+        }
+      </button>
+      {open && (
+        <div className="mt-0.5 flex flex-col gap-0.5 ml-2 pl-3 border-l border-gray-100">
+          <NavLink
+            to="/invoices/customers"
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors
+              ${isActive ? 'text-brand-600 font-semibold bg-brand-50' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`
+            }
+          >
+            <Users size={15} className="shrink-0" />
+            Clients
+          </NavLink>
+          <NavLink
+            to="/invoices/suppliers"
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors
+              ${isActive ? 'text-brand-600 font-semibold bg-brand-50' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`
+            }
+          >
+            <Truck size={15} className="shrink-0" />
+            Fournisseurs
+          </NavLink>
+        </div>
+      )}
     </div>
   )
 }
@@ -215,8 +257,14 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4 flex flex-col gap-5">
         <NavSection label="Principal" items={mainNav} />
         <NavSection label="Catalogue & Tiers" items={businessNav} />
-        <NavSection label="Commandes" items={ordersNav} />
-        <NavSection label="Commerce" items={transactionNav} />
+        <div>
+          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Commandes</p>
+          <div className="flex flex-col gap-0.5">
+            {ordersNav.map(item => <NavItemLink key={item.to} item={item} />)}
+            <InvoicesSection />
+            <NavItemLink item={deliveryItem} />
+          </div>
+        </div>
         <AccountingSection />
         <ConfigSection />
         <NavSection label="Administration" items={adminNav} />

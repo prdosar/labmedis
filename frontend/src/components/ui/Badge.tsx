@@ -31,6 +31,18 @@ export function invoiceStatusBadge(status: string) {
   return <Badge variant={s.variant}>{s.label}</Badge>
 }
 
+export function supplierOrderStatusBadge(status: string) {
+  const map: Record<string, { label: string; variant: BadgeVariant }> = {
+    Brouillon:     { label: 'Brouillon',      variant: 'gray'   },
+    Envoyée:       { label: 'Envoyée',         variant: 'blue'   },
+    ProformaReçue: { label: 'Proforma reçue',  variant: 'yellow' },
+    Convertie:     { label: 'Convertie',       variant: 'green'  },
+    Annulée:       { label: 'Annulée',         variant: 'red'    },
+  }
+  const s = map[status] ?? { label: status, variant: 'gray' as BadgeVariant }
+  return <Badge variant={s.variant}>{s.label}</Badge>
+}
+
 export function deliveryStatusBadge(status: string) {
   const map: Record<string, { label: string; variant: BadgeVariant }> = {
     Draft: { label: 'Brouillon', variant: 'gray' },

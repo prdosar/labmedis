@@ -173,13 +173,7 @@ export function ReceiveProformaPage() {
   return (
     <>
       {/* ── Print area ────────────────────────────────────────────────────────── */}
-      <div className="hidden print:block print-area">
-        <style>{`
-          @media print {
-            body > * { display: none !important; }
-            .print-area { display: block !important; }
-          }
-        `}</style>
+      <div className="hidden print:block">
         <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', padding: '15mm 20mm' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -386,6 +380,12 @@ export function ReceiveProformaPage() {
                     </div>
                   )
                 })}
+              </div>
+
+              {/* Products subtotal */}
+              <div className="px-5 py-2.5 border-t border-gray-200 bg-gray-50/60 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Montant total produits FOB</span>
+                <span className="text-sm font-bold text-gray-900">{fmt(totalLines)} {currency}</span>
               </div>
 
               {/* Freight line */}

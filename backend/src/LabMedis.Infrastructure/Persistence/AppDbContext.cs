@@ -42,6 +42,8 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<SupplierOrder> SupplierOrders => Set<SupplierOrder>();
     public DbSet<SupplierOrderLine> SupplierOrderLines => Set<SupplierOrderLine>();
     public DbSet<SupplierOrderDocument> SupplierOrderDocuments => Set<SupplierOrderDocument>();
+    public DbSet<SupplierProformaRejection> SupplierProformaRejections => Set<SupplierProformaRejection>();
+    public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

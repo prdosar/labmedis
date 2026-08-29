@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Trash2, Printer, Mail } from 'lucide-react'
+import { Plus, Trash2, Printer, Mail, CheckCircle, ArrowLeft } from 'lucide-react'
+import logo from '../../assets/logo.png'
 import type { ProductDto, SupplierDto } from '../../api/types'
 import { suppliersApi, productsApi, supplierOrdersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
@@ -49,6 +50,7 @@ export function SupplierOrderFormPage() {
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
   // Reference info for the existing order (edit mode)
@@ -115,7 +117,7 @@ export function SupplierOrderFormPage() {
     if (!supplierId) { setFormError('Sélectionnez un fournisseur.'); return }
     const validLines = lines.filter(l => l.productId && Number(l.quantity) > 0)
     if (!validLines.length) { setFormError('Ajoutez au moins une ligne.'); return }
-    setSaving(true); setFormError(null)
+    setSaving(true); setFormError(null); setSaved(false)
     try {
       const dto = {
         supplierId: Number(supplierId),
@@ -131,12 +133,12 @@ export function SupplierOrderFormPage() {
       }
       if (isEdit && id) {
         await supplierOrdersApi.update(Number(id), dto)
-        toast('Bon de commande mis à jour.')
       } else {
-        await supplierOrdersApi.create(dto)
-        toast('Bon de commande créé.')
+        const order = await supplierOrdersApi.create(dto)
+        setOrderRef(order.reference)
+        navigate(`/orders/suppliers/${order.id}/edit`, { replace: true })
       }
-      navigate('/orders/suppliers')
+      setSaved(true)
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.")
     } finally {
@@ -176,20 +178,15 @@ export function SupplierOrderFormPage() {
   return (
     <>
       {/* ── Print area (hidden on screen, shown only when printing) ── */}
-      <div className="hidden print:block print-area">
-        <style>{`
-          @media print {
-            body > * { display: none !important; }
-            .print-area { display: block !important; }
-            .print-area * { visibility: visible; }
-          }
-        `}</style>
+      <div className="hidden print:block">
         <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '12pt', padding: '20mm' }}>
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-            <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>LABMEDIS SARL</div>
-            <div style={{ fontSize: '9pt', color: '#555' }}>
-              Grossiste dépositaire en produits pharmaceutiques — Lomé, Togo
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '16px' }}>
+            <img src={logo} alt="LabMedis" style={{ height: '60px', objectFit: 'contain' }} />
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '14pt', fontWeight: 'bold', color: '#1a1a1a' }}>LABMEDIS SARL</div>
+              <div style={{ fontSize: '9pt', color: '#555', marginTop: '2px' }}>Grossiste dépositaire en produits pharmaceutiques</div>
+              <div style={{ fontSize: '9pt', color: '#555' }}>Lomé, Togo</div>
             </div>
           </div>
 
@@ -254,14 +251,44 @@ export function SupplierOrderFormPage() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate('/orders/suppliers')}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
           >
-            ← Retour aux commandes fournisseurs
+            <ArrowLeft size={14} />
+            Retour aux commandes fournisseurs
           </button>
           <h2 className="text-base font-semibold text-gray-800">
             {isEdit ? `Modifier ${orderRef || `la commande #${id}`}` : 'Nouveau bon de commande fournisseur'}
           </h2>
         </div>
+
+        {saved && (
+          <div className="flex items-center justify-between px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+              <CheckCircle size={16} />
+              Bon de commande {orderRef ? <strong>{orderRef}</strong> : ''} enregistré avec succès.
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-300 bg-white text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
+              >
+                <Printer size={13} /> Imprimer
+              </button>
+              <button
+                onClick={() => toast('Configuration email requise — les paramètres seront fournis ultérieurement.', 'info')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-300 bg-white text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
+              >
+                <Mail size={13} /> Envoyer par email
+              </button>
+              <button
+                onClick={() => navigate('/orders/suppliers')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-xs font-medium text-white hover:bg-green-700 transition-colors"
+              >
+                <ArrowLeft size={13} /> Retour à la liste
+              </button>
+            </div>
+          </div>
+        )}
 
         {formError && (
           <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
@@ -482,7 +509,7 @@ export function SupplierOrderFormPage() {
                 onClick={() => navigate('/orders/suppliers')}
                 className="w-full justify-center"
               >
-                Annuler
+                <ArrowLeft size={14} /> Retour à la liste
               </Button>
             </div>
           </div>

@@ -20,5 +20,7 @@ public record SupplierOrderDto(
     DateOnly? ExpectedShippingDate,
     IReadOnlyList<SupplierOrderLineDto> Lines,
     IReadOnlyList<SupplierOrderDocumentDto> Documents,
+    IReadOnlyList<SupplierProformaRejectionDto> ProformaRejections,
+    SupplierInvoiceDto? Invoice,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

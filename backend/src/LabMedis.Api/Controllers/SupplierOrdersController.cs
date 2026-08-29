@@ -56,6 +56,32 @@ public class SupplierOrdersController : ControllerBase
         long id, [FromBody] ReceiveProformaDto dto, CancellationToken ct)
         => Ok(await _service.ReceiveProformaAsync(id, dto, ct));
 
+    [HttpPost("{id:long}/validate-proforma")]
+    public async Task<ActionResult<SupplierOrderDto>> ValidateProforma(long id, CancellationToken ct)
+        => Ok(await _service.ValidateProformaAsync(id, ct));
+
+    [HttpPost("{id:long}/reject-proforma")]
+    public async Task<ActionResult<SupplierOrderDto>> RejectProforma(
+        long id, [FromBody] RejectProformaDto dto, CancellationToken ct)
+        => Ok(await _service.RejectProformaAsync(id, dto, ct));
+
+    [HttpPost("{id:long}/receive-invoice")]
+    public async Task<ActionResult<SupplierOrderDto>> ReceiveInvoice(
+        long id, [FromBody] ReceiveSupplierInvoiceDto dto, CancellationToken ct)
+        => Ok(await _service.ReceiveInvoiceAsync(id, dto, ct));
+
+    [HttpPost("{id:long}/receive-goods")]
+    public async Task<ActionResult<SupplierOrderDto>> ReceiveGoods(
+        long id, [FromBody] ReceiveGoodsDto dto, CancellationToken ct)
+        => Ok(await _service.ReceiveGoodsAsync(id, dto, ct));
+
+    // ── Factures fournisseurs ─────────────────────────────────────────────────────
+
+    [HttpPost("invoices/{invoiceId:long}/payment")]
+    public async Task<ActionResult<SupplierInvoiceDto>> RegisterPayment(
+        long invoiceId, [FromBody] RegisterSupplierPaymentDto dto, CancellationToken ct)
+        => Ok(await _service.RegisterPaymentAsync(invoiceId, dto, ct));
+
     // ── Documents ────────────────────────────────────────────────────────────────
 
     [HttpGet("{id:long}/documents")]

@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Edit2, Send, XCircle, Search, X, FileInput } from 'lucide-react'
+import {
+  Plus, Edit2, Send, XCircle, Search, X, FileInput,
+  CheckCircle, AlertTriangle, FileText, Package,
+} from 'lucide-react'
 import type { SupplierOrderSummaryDto } from '../../api/types'
 import { supplierOrdersApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -9,12 +12,15 @@ import { ApiError } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { Pagination } from '../../components/ui/Pagination'
 import { Button } from '../../components/ui/Button'
-import { ConfirmDialog } from '../../components/ui/Modal'
+import { ConfirmDialog, Modal } from '../../components/ui/Modal'
 
 const STATUS_LABELS: Record<string, string> = {
   Brouillon: 'Brouillon',
   Envoyée: 'Envoyée',
   ProformaReçue: 'Proforma reçue',
+  ProformaValidée: 'Proforma validée',
+  FactureReçue: 'Facture reçue',
+  Réceptionnée: 'Réceptionnée',
   Convertie: 'Convertie',
   Annulée: 'Annulée',
 }
@@ -23,11 +29,19 @@ const STATUS_COLORS: Record<string, string> = {
   Brouillon: 'bg-gray-50 text-gray-600 border border-gray-200',
   Envoyée: 'bg-blue-50 text-blue-700 border border-blue-200',
   ProformaReçue: 'bg-amber-50 text-amber-700 border border-amber-200',
+  ProformaValidée: 'bg-violet-50 text-violet-700 border border-violet-200',
+  FactureReçue: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  Réceptionnée: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   Convertie: 'bg-green-50 text-green-700 border border-green-200',
   Annulée: 'bg-red-50 text-red-500 border border-red-200',
 }
 
-const STATUSES = ['', 'Brouillon', 'Envoyée', 'ProformaReçue', 'Convertie', 'Annulée']
+const STATUSES = [
+  '', 'Brouillon', 'Envoyée', 'ProformaReçue',
+  'ProformaValidée', 'FactureReçue', 'Réceptionnée', 'Convertie', 'Annulée',
+]
+
+const TERMINAL = new Set(['Réceptionnée', 'Convertie', 'Annulée'])
 
 const searchInputClass =
   'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
@@ -53,6 +67,8 @@ export function SupplierOrdersPage() {
 
   const [confirmSend, setConfirmSend] = useState<SupplierOrderSummaryDto | null>(null)
   const [confirmCancel, setConfirmCancel] = useState<SupplierOrderSummaryDto | null>(null)
+  const [confirmValidate, setConfirmValidate] = useState<SupplierOrderSummaryDto | null>(null)
+  const [rejectModal, setRejectModal] = useState<{ order: SupplierOrderSummaryDto; reason: string } | null>(null)
   const [acting, setActing] = useState(false)
 
   async function handleSend() {
@@ -77,6 +93,36 @@ export function SupplierOrdersPage() {
       await supplierOrdersApi.cancel(confirmCancel.id)
       toast('Bon de commande annulé.', 'info')
       setConfirmCancel(null)
+      refresh()
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur.', 'error')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  async function handleValidate() {
+    if (!confirmValidate) return
+    setActing(true)
+    try {
+      await supplierOrdersApi.validateProforma(confirmValidate.id)
+      toast('Proforma validée.', 'success')
+      setConfirmValidate(null)
+      refresh()
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur.', 'error')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  async function handleRejectProforma() {
+    if (!rejectModal || !rejectModal.reason.trim()) return
+    setActing(true)
+    try {
+      await supplierOrdersApi.rejectProforma(rejectModal.order.id, { reason: rejectModal.reason.trim() })
+      toast('Proforma rejetée — commande remise en brouillon.', 'info')
+      setRejectModal(null)
       refresh()
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Erreur.', 'error')
@@ -174,7 +220,7 @@ export function SupplierOrdersPage() {
           {
             key: 'status',
             header: 'Statut',
-            width: 'w-36',
+            width: 'w-40',
             render: r => (
               <span
                 className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? 'bg-gray-50 text-gray-600'}`}
@@ -194,6 +240,7 @@ export function SupplierOrdersPage() {
         ]}
         actions={row => (
           <div className="flex items-center gap-1">
+            {/* Brouillon: edit + send */}
             {row.status === 'Brouillon' && (
               <>
                 <button
@@ -212,6 +259,8 @@ export function SupplierOrdersPage() {
                 </button>
               </>
             )}
+
+            {/* Envoyée ou ProformaReçue: saisir/modifier la proforma */}
             {(row.status === 'Envoyée' || row.status === 'ProformaReçue') && (
               <button
                 title="Saisir / modifier la proforma reçue"
@@ -221,7 +270,51 @@ export function SupplierOrdersPage() {
                 <FileInput size={14} />
               </button>
             )}
-            {row.status !== 'Convertie' && row.status !== 'Annulée' && (
+
+            {/* ProformaReçue: valider ou rejeter */}
+            {row.status === 'ProformaReçue' && (
+              <>
+                <button
+                  title="Valider la proforma"
+                  onClick={() => setConfirmValidate(row)}
+                  className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                >
+                  <CheckCircle size={14} />
+                </button>
+                <button
+                  title="Rejeter la proforma"
+                  onClick={() => setRejectModal({ order: row, reason: '' })}
+                  className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                >
+                  <AlertTriangle size={14} />
+                </button>
+              </>
+            )}
+
+            {/* ProformaValidée: saisir la facture fournisseur */}
+            {row.status === 'ProformaValidée' && (
+              <button
+                title="Saisir la facture fournisseur"
+                onClick={() => navigate(`/orders/suppliers/${row.id}/receive-invoice`)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              >
+                <FileText size={14} />
+              </button>
+            )}
+
+            {/* FactureReçue: réceptionner les marchandises */}
+            {row.status === 'FactureReçue' && (
+              <button
+                title="Réceptionner les marchandises"
+                onClick={() => navigate(`/orders/suppliers/${row.id}/receive-goods`)}
+                className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              >
+                <Package size={14} />
+              </button>
+            )}
+
+            {/* Annuler: disponible tant que non terminal */}
+            {!TERMINAL.has(row.status) && (
               <button
                 title="Annuler"
                 onClick={() => setConfirmCancel(row)}
@@ -265,6 +358,57 @@ export function SupplierOrdersPage() {
         confirmLabel="Annuler la commande"
         confirmVariant="danger"
       />
+
+      <ConfirmDialog
+        isOpen={!!confirmValidate}
+        onClose={() => setConfirmValidate(null)}
+        onConfirm={handleValidate}
+        title="Valider la proforma"
+        message={`Valider la proforma de la commande ${confirmValidate?.reference} ? Cette action permet de passer à la réception de la facture fournisseur.`}
+        loading={acting}
+        confirmLabel="Valider la proforma"
+        confirmVariant="primary"
+      />
+
+      <Modal
+        isOpen={!!rejectModal}
+        onClose={() => setRejectModal(null)}
+        title="Rejeter la proforma"
+        size="md"
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Indiquez la raison du rejet pour la proforma de la commande{' '}
+          <strong>{rejectModal?.order.reference}</strong>.{' '}
+          La commande sera remise en brouillon pour permettre une nouvelle négociation.
+        </p>
+        <textarea
+          value={rejectModal?.reason ?? ''}
+          onChange={e =>
+            setRejectModal(prev => prev ? { ...prev, reason: e.target.value } : null)
+          }
+          rows={4}
+          placeholder="Ex : Prix trop élevé, délai trop long, produits manquants…"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 resize-none mb-6"
+        />
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => setRejectModal(null)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleRejectProforma}
+            disabled={!rejectModal?.reason.trim() || acting}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2"
+          >
+            {acting && (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
+            Rejeter la proforma
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

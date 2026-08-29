@@ -7,6 +7,7 @@ public class SupplierOrder : BaseEntity
 {
     private readonly List<SupplierOrderLine> _lines = new();
     private readonly List<SupplierOrderDocument> _documents = new();
+    private readonly List<SupplierProformaRejection> _proformaRejections = new();
 
     public string Reference { get; private set; } = string.Empty;
     public DateTime OrderDate { get; set; }
@@ -29,6 +30,10 @@ public class SupplierOrder : BaseEntity
 
     public IReadOnlyCollection<SupplierOrderLine> Lines => _lines;
     public IReadOnlyCollection<SupplierOrderDocument> Documents => _documents;
+    public IReadOnlyCollection<SupplierProformaRejection> ProformaRejections => _proformaRejections;
+
+    // Navigation : une seule facture par commande
+    public SupplierInvoice? SupplierInvoice { get; set; }
 
     public void SetReference(string reference) => Reference = reference;
 
@@ -62,6 +67,49 @@ public class SupplierOrder : BaseEntity
         ExpectedShippingDate = expectedShippingDate;
     }
 
+    public void ValidateProforma()
+    {
+        if (Status != SupplierOrderStatus.ProformaReçue)
+            throw new DomainException("La proforma ne peut être validée que si la commande est au statut 'Proforma reçue'.");
+        Status = SupplierOrderStatus.ProformaValidée;
+    }
+
+    public void RejectProforma(string reason)
+    {
+        if (Status != SupplierOrderStatus.ProformaReçue)
+            throw new DomainException("La proforma ne peut être rejetée que si la commande est au statut 'Proforma reçue'.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("La raison du rejet est obligatoire.");
+
+        _proformaRejections.Add(new SupplierProformaRejection
+        {
+            SupplierOrderId = Id,
+            ProformaReference = ProformaReference ?? string.Empty,
+            RejectedAt = DateTime.UtcNow,
+            Reason = reason.Trim()
+        });
+
+        // Retour en brouillon pour renégociation
+        Status = SupplierOrderStatus.Brouillon;
+        ProformaReference = null;
+        ProformaFilePath = null;
+        ProformaReceivedAt = null;
+    }
+
+    public void MarkInvoiceReceived()
+    {
+        if (Status != SupplierOrderStatus.ProformaValidée)
+            throw new DomainException("La facture ne peut être enregistrée que si la proforma a été validée.");
+        Status = SupplierOrderStatus.FactureReçue;
+    }
+
+    public void MarkGoodsReceived()
+    {
+        if (Status != SupplierOrderStatus.FactureReçue)
+            throw new DomainException("La réception des marchandises ne peut se faire qu'après enregistrement de la facture fournisseur.");
+        Status = SupplierOrderStatus.Réceptionnée;
+    }
+
     public void MarkConverted()
     {
         Status = SupplierOrderStatus.Convertie;
@@ -69,8 +117,8 @@ public class SupplierOrder : BaseEntity
 
     public void Cancel()
     {
-        if (Status == SupplierOrderStatus.Convertie)
-            throw new DomainException("Une commande déjà convertie en arrivage ne peut pas être annulée.");
+        if (Status is SupplierOrderStatus.Réceptionnée or SupplierOrderStatus.Convertie)
+            throw new DomainException("Une commande déjà réceptionnée ne peut pas être annulée.");
         Status = SupplierOrderStatus.Annulée;
     }
 }

@@ -9,7 +9,8 @@ import { ProductDetailPage } from './pages/products/ProductDetailPage'
 import { SuppliersPage } from './pages/suppliers/SuppliersPage'
 import { CustomersPage } from './pages/customers/CustomersPage'
 import { PurchasesPage } from './pages/purchases/PurchasesPage'
-import { InvoicesPage } from './pages/invoices/InvoicesPage'
+import { CustomerInvoicesPage } from './pages/invoices/CustomerInvoicesPage'
+import { SupplierInvoicesPage } from './pages/invoices/SupplierInvoicesPage'
 import { DeliveriesPage } from './pages/deliveries/DeliveriesPage'
 import { StockMovementsPage } from './pages/stock/StockMovementsPage'
 import { CategoriesPage } from './pages/config/CategoriesPage'
@@ -32,6 +33,8 @@ import { CustomerOrderFormPage } from './pages/orders/CustomerOrderFormPage'
 import { SupplierOrdersPage } from './pages/orders/SupplierOrdersPage'
 import { SupplierOrderFormPage } from './pages/orders/SupplierOrderFormPage'
 import { ReceiveProformaPage } from './pages/orders/ReceiveProformaPage'
+import { ReceiveInvoicePage } from './pages/orders/ReceiveInvoicePage'
+import { ReceiveGoodsPage } from './pages/orders/ReceiveGoodsPage'
 
 function ProtectedRoutes() {
   const { user, isLoading } = useAuth()
@@ -69,8 +72,12 @@ export default function App() {
               <Route path="/orders/suppliers/new" element={<SupplierOrderFormPage />} />
               <Route path="/orders/suppliers/:id/edit" element={<SupplierOrderFormPage />} />
               <Route path="/orders/suppliers/:id/receive-proforma" element={<ReceiveProformaPage />} />
+              <Route path="/orders/suppliers/:id/receive-invoice" element={<ReceiveInvoicePage />} />
+              <Route path="/orders/suppliers/:id/receive-goods" element={<ReceiveGoodsPage />} />
               <Route path="/purchases" element={<PurchasesPage />} />
-              <Route path="/invoices" element={<InvoicesPage />} />
+              <Route path="/invoices" element={<Navigate to="/invoices/customers" replace />} />
+              <Route path="/invoices/customers" element={<CustomerInvoicesPage />} />
+              <Route path="/invoices/suppliers" element={<SupplierInvoicesPage />} />
               <Route path="/deliveries" element={<DeliveriesPage />} />
               <Route path="/stock-movements" element={<StockMovementsPage />} />
               <Route path="/config/categories" element={<CategoriesPage />} />

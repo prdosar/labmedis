@@ -55,6 +55,9 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
                 .ThenInclude(l => l.Product)
                     .ThenInclude(p => p!.Dosage)
             .Include(o => o.Documents)
+            .Include(o => o.ProformaRejections)
+            .Include(o => o.SupplierInvoice)
+                .ThenInclude(i => i!.Supplier)
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
         if (order is null) return null;
@@ -216,6 +219,157 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
 
+    public async Task<SupplierOrderDto> ValidateProformaAsync(long id, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.ProformaRejections)
+            .Include(o => o.SupplierInvoice)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
+
+        order.ValidateProforma();
+        await DbContext.SaveChangesAsync(ct);
+        return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<SupplierOrderDto> RejectProformaAsync(long id, RejectProformaDto dto, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.ProformaRejections)
+            .Include(o => o.SupplierInvoice)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
+
+        order.RejectProforma(dto.Reason);
+        await DbContext.SaveChangesAsync(ct);
+        return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<SupplierOrderDto> ReceiveInvoiceAsync(long id, ReceiveSupplierInvoiceDto dto, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.ProformaRejections)
+            .Include(o => o.SupplierInvoice)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
+
+        if (order.SupplierInvoice is not null)
+            throw new DomainException("Une facture fournisseur a déjà été enregistrée pour cette commande.");
+
+        order.MarkInvoiceReceived();
+
+        var invoice = new SupplierInvoice
+        {
+            SupplierOrderId = order.Id,
+            SupplierId = order.SupplierId,
+            InvoiceReference = dto.InvoiceReference.Trim(),
+            InvoiceDate = dto.InvoiceDate,
+            DueDate = dto.DueDate,
+            TotalAmountForeign = dto.TotalAmountForeign,
+            Currency = dto.Currency.Trim().ToUpperInvariant(),
+            ExchangeRateToXof = dto.ExchangeRateToXof,
+            Notes = dto.Notes?.Trim()
+        };
+        invoice.ComputeXof();
+
+        DbContext.SupplierInvoices.Add(invoice);
+        await DbContext.SaveChangesAsync(ct);
+        return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<SupplierInvoiceDto> RegisterPaymentAsync(long invoiceId, RegisterSupplierPaymentDto dto, CancellationToken ct = default)
+    {
+        var invoice = await DbContext.SupplierInvoices
+            .Include(i => i.Supplier)
+            .FirstOrDefaultAsync(i => i.Id == invoiceId, ct)
+            ?? throw new DomainException($"Facture fournisseur introuvable (Id={invoiceId}).");
+
+        invoice.RegisterPayment(dto.Amount);
+        await DbContext.SaveChangesAsync(ct);
+        return ToInvoiceDto(invoice);
+    }
+
+    public async Task<SupplierOrderDto> ReceiveGoodsAsync(long id, ReceiveGoodsDto dto, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.Supplier)
+            .Include(o => o.Lines)
+                .ThenInclude(l => l.Product)
+            .Include(o => o.ProformaRejections)
+            .Include(o => o.SupplierInvoice)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
+
+        order.MarkGoodsReceived();
+
+        // Générer la référence d'arrivage
+        var year = DateTime.UtcNow.Year;
+        var arrivalPrefix = $"ARR-{year}-";
+        var existingRefs = await DbContext.Purchases
+            .IgnoreQueryFilters()
+            .Where(p => p.Reference.StartsWith(arrivalPrefix))
+            .Select(p => p.Reference)
+            .ToListAsync(ct);
+        var maxSeq = existingRefs
+            .Select(r => { var parts = r.Split('-'); return parts.Length == 3 && int.TryParse(parts[2], out var n) ? n : 0; })
+            .DefaultIfEmpty(0).Max();
+        var arrivalRef = $"{arrivalPrefix}{(maxSeq + 1):D3}";
+
+        var purchase = new Purchase
+        {
+            Reference = arrivalRef,
+            PurchaseDate = dto.ArrivalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            ArrivalDate = dto.ArrivalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            SupplierId = order.SupplierId,
+            ContainerReference = order.ContainerReference,
+            Notes = dto.Notes?.Trim()
+        };
+        purchase.SetExchangeRate(dto.ExchangeRateToXof);
+        purchase.SetCoefficients(
+            dto.CommissionCoefficient, dto.FreightCoefficient,
+            dto.TransitCoefficient, dto.TransferFeesCoefficient,
+            dto.DefaultMarginCoefficient);
+
+        DbContext.Purchases.Add(purchase);
+        await DbContext.SaveChangesAsync(ct); // obtenir purchase.Id
+
+        foreach (var lineInput in dto.Lines)
+        {
+            var orderLine = order.Lines.FirstOrDefault(l => l.Id == lineInput.OrderLineId)
+                ?? throw new DomainException($"Ligne de commande introuvable (Id={lineInput.OrderLineId}).");
+
+            var product = await DbContext.Products
+                .FirstOrDefaultAsync(p => p.Id == orderLine.ProductId, ct)
+                ?? throw new DomainException($"Produit introuvable (Id={orderLine.ProductId}).");
+
+            var purchaseLine = purchase.AddLine(
+                product,
+                lineInput.LotNumber,
+                lineInput.Quantity,
+                lineInput.UnitFobPrice,
+                lineInput.ExpirationDate,
+                lineInput.TargetSellingPriceHt);
+
+            DbContext.PurchaseLines.Add(purchaseLine);
+            await DbContext.SaveChangesAsync(ct); // obtenir purchaseLine.Id
+
+            // Mouvement de stock entrant (QuantityRemaining est déjà initialisé dans AddLine)
+            DbContext.StockMovements.Add(new StockMovement
+            {
+                ProductId = product.Id,
+                WarehouseId = product.WarehouseId,
+                PurchaseLineId = purchaseLine.Id,
+                MovementType = StockMovementType.PurchaseEntry,
+                Quantity = lineInput.Quantity,
+                MovementDate = DateTime.UtcNow,
+                Reference = arrivalRef
+            });
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+        return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
+    }
+
     public async Task<SupplierOrderDocumentDto> UploadDocumentAsync(
         long orderId, Stream content, string originalFileName, long fileSize, string documentType, CancellationToken ct = default)
     {
@@ -307,9 +461,35 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         o.Origin,
         o.ExpectedShippingDate,
         o.Lines.Select(ToLineDto).ToList(),
-        o.Documents.Select(d => ToDocumentDto(d)).ToList(),
+        o.Documents.Select(ToDocumentDto).ToList(),
+        o.ProformaRejections.Select(ToRejectionDto).ToList(),
+        o.SupplierInvoice is null ? null : ToInvoiceDto(o.SupplierInvoice),
         o.CreatedAt,
         o.UpdatedAt);
+
+    private static SupplierProformaRejectionDto ToRejectionDto(SupplierProformaRejection r) => new(
+        r.Id,
+        r.ProformaReference,
+        r.RejectedAt,
+        r.Reason);
+
+    private static SupplierInvoiceDto ToInvoiceDto(SupplierInvoice i) => new(
+        i.Id,
+        i.SupplierOrderId,
+        i.SupplierId,
+        i.Supplier?.Name ?? "",
+        i.InvoiceReference,
+        i.InvoiceDate,
+        i.DueDate,
+        i.TotalAmountForeign,
+        i.Currency,
+        i.ExchangeRateToXof,
+        i.TotalAmountXof,
+        i.Status.ToString(),
+        i.AmountPaid,
+        i.BalanceDue,
+        i.Notes,
+        i.CreatedAt);
 
     private static SupplierOrderLineDto ToLineDto(SupplierOrderLine l) => new(
         l.Id,

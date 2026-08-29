@@ -10,7 +10,8 @@ const titles: Record<string, string> = {
   '/orders/suppliers': 'Commandes fournisseurs',
   '/orders/suppliers/new': 'Nouveau bon de commande fournisseur',
   '/purchases': 'Achats',
-  '/invoices': 'Factures',
+  '/invoices/customers': 'Factures clients',
+  '/invoices/suppliers': 'Factures fournisseurs',
   '/deliveries': 'Livraisons',
   '/stock-movements': 'Mouvements de stock',
   '/config/categories': 'Catégories',
@@ -36,6 +37,9 @@ export function Header() {
     ?? (/^\/products\/\d+/.test(pathname) ? 'Fiche produit'
       : /^\/orders\/customers\/\d+\/edit/.test(pathname) ? 'Commande client'
       : /^\/orders\/suppliers\/\d+\/edit/.test(pathname) ? 'Bon de commande fournisseur'
+      : /^\/orders\/suppliers\/\d+\/receive-proforma/.test(pathname) ? 'Saisie proforma'
+      : /^\/orders\/suppliers\/\d+\/receive-invoice/.test(pathname) ? 'Facture fournisseur'
+      : /^\/orders\/suppliers\/\d+\/receive-goods/.test(pathname) ? 'Réception marchandises'
       : 'LabMedis')
 
   return (

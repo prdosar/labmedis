@@ -25,6 +25,7 @@ import type {
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
+  SupplierInvoiceDto,
   SupplierOrderDocumentDto,
   SupplierOrderDto,
   SupplierOrderSummaryDto,
@@ -341,6 +342,39 @@ export const supplierOrdersApi = {
     expectedShippingDate?: string | null
     lines: { lineId: number; unitFobPrice?: number | null }[]
   }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-proforma`, dto),
+  validateProforma: (id: number) =>
+    api.post<SupplierOrderDto>(`/supplier-orders/${id}/validate-proforma`),
+  rejectProforma: (id: number, dto: { reason: string }) =>
+    api.post<SupplierOrderDto>(`/supplier-orders/${id}/reject-proforma`, dto),
+  receiveInvoice: (id: number, dto: {
+    invoiceReference: string
+    invoiceDate: string
+    dueDate?: string | null
+    totalAmountForeign: number
+    currency: string
+    exchangeRateToXof: number
+    notes?: string | null
+  }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-invoice`, dto),
+  receiveGoods: (id: number, dto: {
+    arrivalDate: string
+    exchangeRateToXof: number
+    commissionCoefficient: number
+    freightCoefficient: number
+    transitCoefficient: number
+    transferFeesCoefficient: number
+    defaultMarginCoefficient: number
+    notes?: string | null
+    lines: {
+      orderLineId: number
+      lotNumber: string
+      quantity: number
+      unitFobPrice: number
+      expirationDate?: string | null
+      targetSellingPriceHt?: number | null
+    }[]
+  }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-goods`, dto),
+  registerPayment: (invoiceId: number, dto: { amount: number; notes?: string | null }) =>
+    api.post<SupplierInvoiceDto>(`/supplier-orders/invoices/${invoiceId}/payment`, dto),
   getDocuments: (id: number) => api.get<SupplierOrderDocumentDto[]>(`/supplier-orders/${id}/documents`),
   uploadDocument: async (id: number, file: File, documentType: string): Promise<SupplierOrderDocumentDto> => {
     const token = localStorage.getItem('labmedis_token')
