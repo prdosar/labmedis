@@ -351,10 +351,12 @@ export const supplierOrdersApi = {
     invoiceDate: string
     dueDate?: string | null
     totalAmountForeign: number
+    totalAmountXof: number
     currency: string
-    exchangeRateToXof: number
     discountAmountForeign?: number | null
+    discountAmountXof?: number | null
     advanceAmountForeign?: number | null
+    advanceAmountXof?: number | null
     notes?: string | null
   }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-invoice`, dto),
   receiveGoods: (id: number, dto: {

@@ -268,12 +268,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             DueDate = dto.DueDate,
             TotalAmountForeign = dto.TotalAmountForeign,
             Currency = dto.Currency.Trim().ToUpperInvariant(),
-            ExchangeRateToXof = dto.ExchangeRateToXof,
             DiscountAmountForeign = dto.DiscountAmountForeign,
             AdvanceAmountForeign = dto.AdvanceAmountForeign,
             Notes = dto.Notes?.Trim()
         };
-        invoice.ComputeXof();
+        invoice.SetExplicitAmounts(dto.TotalAmountXof, dto.DiscountAmountXof, dto.AdvanceAmountXof);
 
         DbContext.SupplierInvoices.Add(invoice);
         await DbContext.SaveChangesAsync(ct); // obtenir invoice.Id
@@ -343,6 +342,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         DbContext.Purchases.Add(purchase);
         await DbContext.SaveChangesAsync(ct); // obtenir purchase.Id
 
+        decimal totalCostXof = 0m;
+
         foreach (var lineInput in dto.Lines)
         {
             var orderLine = order.Lines.FirstOrDefault(l => l.Id == lineInput.OrderLineId)
@@ -359,6 +360,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
                 lineInput.UnitFobPrice,
                 lineInput.ExpirationDate,
                 lineInput.TargetSellingPriceHt);
+
+            totalCostXof += purchaseLine.UnitCostPriceXof * lineInput.Quantity;
 
             DbContext.PurchaseLines.Add(purchaseLine);
             await DbContext.SaveChangesAsync(ct); // obtenir purchaseLine.Id
@@ -377,6 +380,14 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         }
 
         await DbContext.SaveChangesAsync(ct);
+
+        if (totalCostXof > 0)
+        {
+            await PostGoodsReceptionJournalEntryAsync(
+                purchase, totalCostXof, order.Supplier?.Name ?? "", arrivalRef, ct);
+            await DbContext.SaveChangesAsync(ct);
+        }
+
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
 
@@ -501,6 +512,50 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             DebitAmount = 0m,
             CreditAmount = advXof,
             SupplierId = invoice.SupplierId
+        });
+
+        entry.Validate();
+        DbContext.JournalEntries.Add(entry);
+    }
+
+    private async Task PostGoodsReceptionJournalEntryAsync(
+        Purchase purchase, decimal totalCostXof, string supplierName, string arrivalRef, CancellationToken ct)
+    {
+        // D: 371 Marchandises (Stock) / C: 601 Achats — entrée physique en stock
+        var stockAccount = await FindAccountAsync("371", ct)
+            ?? await FindAccountAsync("370", ct)
+            ?? await FindAccountAsync("37", ct);
+        var achatAccount = await FindAccountAsync("601", ct)
+            ?? await FindAccountAsync("6011", ct);
+
+        if (stockAccount is null || achatAccount is null) return;
+
+        var entry = new JournalEntry
+        {
+            JournalCode = "ACH",
+            EntryDate = DateTime.UtcNow,
+            Reference = arrivalRef,
+            Description = $"Réception marchandises {supplierName} — {arrivalRef}",
+            SourceType = "PurchaseEntry",
+            SourceId = purchase.Id,
+            IsPosted = true
+        };
+
+        entry.AddLine(new JournalLine
+        {
+            AccountId = stockAccount.Id,
+            Label = $"Entrée stock — {supplierName}",
+            DebitAmount = totalCostXof,
+            CreditAmount = 0m,
+            SupplierId = purchase.SupplierId
+        });
+        entry.AddLine(new JournalLine
+        {
+            AccountId = achatAccount.Id,
+            Label = $"Contrepartie achats — {arrivalRef}",
+            DebitAmount = 0m,
+            CreditAmount = totalCostXof,
+            SupplierId = purchase.SupplierId
         });
 
         entry.Validate();

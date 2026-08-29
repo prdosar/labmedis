@@ -53,6 +53,19 @@ public class SupplierInvoice : BaseEntity
             : 0m;
     }
 
+    // Accepte les montants XOF saisis directement par l'utilisateur (arrondi CFA),
+    // et recalcule le taux de change depuis TotalAmountXof / TotalAmountForeign.
+    public void SetExplicitAmounts(decimal totalXof, decimal? discountXof, decimal? advanceXof)
+    {
+        TotalAmountXof = totalXof;
+        DiscountAmountXof = discountXof ?? 0m;
+        AdvanceAmountXof = advanceXof ?? 0m;
+
+        ExchangeRateToXof = TotalAmountForeign > 0
+            ? Math.Round(totalXof / TotalAmountForeign, 6)
+            : ExchangeRateToXof;
+    }
+
     public void RegisterPayment(decimal amount)
     {
         if (amount <= 0)

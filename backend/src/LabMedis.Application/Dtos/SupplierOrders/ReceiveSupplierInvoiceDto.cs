@@ -5,9 +5,11 @@ public record ReceiveSupplierInvoiceDto(
     DateOnly InvoiceDate,
     DateOnly? DueDate,
     decimal TotalAmountForeign,
+    decimal TotalAmountXof,
     string Currency,
-    decimal ExchangeRateToXof,
     decimal? DiscountAmountForeign,
+    decimal? DiscountAmountXof,
     decimal? AdvanceAmountForeign,
+    decimal? AdvanceAmountXof,
     string? Notes
 );
