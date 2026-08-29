@@ -38,8 +38,11 @@ services:
       Smtp__User: "contact@labmedis-togo.com"
       Smtp__Pass: "${SMTP_PASS}"
       Smtp__From: "contact@labmedis-togo.com"
-    ports:
-      - "8082:8080"
+    # API non exposée publiquement : accessible uniquement via le proxy nginx
+    # du container frontend (réseau interne labmedis-net).
+    # Décommenter si l'API doit être exposée sur api.labmedis-togo.com :
+    # ports:
+    #   - "8082:8080"
     volumes:
       - uploads_data:/app/uploads
     networks:
