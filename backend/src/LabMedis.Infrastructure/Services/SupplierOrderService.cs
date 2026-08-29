@@ -248,6 +248,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     public async Task<SupplierOrderDto> ReceiveInvoiceAsync(long id, ReceiveSupplierInvoiceDto dto, CancellationToken ct = default)
     {
         var order = await DbSet
+            .Include(o => o.Supplier)
             .Include(o => o.ProformaRejections)
             .Include(o => o.SupplierInvoice)
             .FirstOrDefaultAsync(o => o.Id == id, ct)
@@ -268,11 +269,20 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             TotalAmountForeign = dto.TotalAmountForeign,
             Currency = dto.Currency.Trim().ToUpperInvariant(),
             ExchangeRateToXof = dto.ExchangeRateToXof,
+            DiscountAmountForeign = dto.DiscountAmountForeign,
+            AdvanceAmountForeign = dto.AdvanceAmountForeign,
             Notes = dto.Notes?.Trim()
         };
         invoice.ComputeXof();
 
         DbContext.SupplierInvoices.Add(invoice);
+        await DbContext.SaveChangesAsync(ct); // obtenir invoice.Id
+
+        var supplierName = order.Supplier?.Name ?? "";
+        await PostInvoiceJournalEntryAsync(invoice, supplierName, ct);
+        if (invoice.AdvanceAmountXof > 0)
+            await PostAdvanceJournalEntryAsync(invoice, supplierName, ct);
+
         await DbContext.SaveChangesAsync(ct);
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
@@ -406,6 +416,97 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
     // ── Private helpers ──────────────────────────────────────────────────────────
 
+    // ── Écritures comptables ─────────────────────────────────────────────────────
+
+    private async Task<ChartAccount?> FindAccountAsync(string code, CancellationToken ct)
+        => await DbContext.ChartAccounts.FirstOrDefaultAsync(a => a.Code == code, ct);
+
+    private async Task PostInvoiceJournalEntryAsync(
+        SupplierInvoice invoice, string supplierName, CancellationToken ct)
+    {
+        // D: 601 Achats de marchandises / C: 401 Fournisseurs
+        var achatAccount = await FindAccountAsync("601", ct)
+            ?? await FindAccountAsync("6011", ct);
+        var fournisseurAccount = await FindAccountAsync("401", ct);
+
+        if (achatAccount is null || fournisseurAccount is null) return;
+
+        var netXof = invoice.NetAmountXof;
+        var entry = new JournalEntry
+        {
+            JournalCode = "ACH",
+            EntryDate = DateTime.UtcNow,
+            Reference = invoice.InvoiceReference,
+            Description = $"Facture fournisseur {supplierName} ({invoice.Currency}) — {invoice.InvoiceReference}",
+            SourceType = "SupplierInvoice",
+            SourceId = invoice.Id,
+            IsPosted = true
+        };
+
+        entry.AddLine(new JournalLine
+        {
+            AccountId = achatAccount.Id,
+            Label = $"Achats — {supplierName}",
+            DebitAmount = netXof,
+            CreditAmount = 0m,
+            SupplierId = invoice.SupplierId
+        });
+        entry.AddLine(new JournalLine
+        {
+            AccountId = fournisseurAccount.Id,
+            Label = $"Fournisseur {supplierName} / {invoice.InvoiceReference}",
+            DebitAmount = 0m,
+            CreditAmount = netXof,
+            SupplierId = invoice.SupplierId
+        });
+
+        entry.Validate();
+        DbContext.JournalEntries.Add(entry);
+    }
+
+    private async Task PostAdvanceJournalEntryAsync(
+        SupplierInvoice invoice, string supplierName, CancellationToken ct)
+    {
+        // D: 4094 Fournisseurs - avances / C: 521 Banque
+        var avanceAccount = await FindAccountAsync("4094", ct);
+        var banqueAccount = await FindAccountAsync("521", ct)
+            ?? await FindAccountAsync("5211", ct);
+
+        if (avanceAccount is null || banqueAccount is null) return;
+
+        var advXof = invoice.AdvanceAmountXof;
+        var entry = new JournalEntry
+        {
+            JournalCode = "BNQ",
+            EntryDate = DateTime.UtcNow,
+            Reference = $"ADV-{invoice.InvoiceReference}",
+            Description = $"Avance versée — {supplierName} / {invoice.InvoiceReference}",
+            SourceType = "SupplierAdvance",
+            SourceId = invoice.Id,
+            IsPosted = true
+        };
+
+        entry.AddLine(new JournalLine
+        {
+            AccountId = avanceAccount.Id,
+            Label = $"Avance fournisseur {supplierName}",
+            DebitAmount = advXof,
+            CreditAmount = 0m,
+            SupplierId = invoice.SupplierId
+        });
+        entry.AddLine(new JournalLine
+        {
+            AccountId = banqueAccount.Id,
+            Label = $"Règlement avance {supplierName}",
+            DebitAmount = 0m,
+            CreditAmount = advXof,
+            SupplierId = invoice.SupplierId
+        });
+
+        entry.Validate();
+        DbContext.JournalEntries.Add(entry);
+    }
+
     private async Task<string> NextReferenceAsync(CancellationToken ct)
     {
         var year = DateTime.UtcNow.Year;
@@ -485,6 +586,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         i.Currency,
         i.ExchangeRateToXof,
         i.TotalAmountXof,
+        i.DiscountAmountForeign,
+        i.DiscountAmountXof,
+        i.AdvanceAmountForeign,
+        i.AdvanceAmountXof,
+        i.NetAmountXof,
         i.Status.ToString(),
         i.AmountPaid,
         i.BalanceDue,

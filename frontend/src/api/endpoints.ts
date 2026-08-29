@@ -353,6 +353,8 @@ export const supplierOrdersApi = {
     totalAmountForeign: number
     currency: string
     exchangeRateToXof: number
+    discountAmountForeign?: number | null
+    advanceAmountForeign?: number | null
     notes?: string | null
   }) => api.post<SupplierOrderDto>(`/supplier-orders/${id}/receive-invoice`, dto),
   receiveGoods: (id: number, dto: {

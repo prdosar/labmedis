@@ -7,5 +7,7 @@ public record ReceiveSupplierInvoiceDto(
     decimal TotalAmountForeign,
     string Currency,
     decimal ExchangeRateToXof,
+    decimal? DiscountAmountForeign,
+    decimal? AdvanceAmountForeign,
     string? Notes
 );

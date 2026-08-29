@@ -544,6 +544,11 @@ export interface SupplierInvoiceDto {
   currency: string
   exchangeRateToXof: number
   totalAmountXof: number
+  discountAmountForeign: number | null
+  discountAmountXof: number
+  advanceAmountForeign: number | null
+  advanceAmountXof: number
+  netAmountXof: number
   status: string
   amountPaid: number
   balanceDue: number
