@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, User } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { ApiError } from '../../api/client'
@@ -7,6 +7,7 @@ import logo from '../../assets/logo.png'
 
 export function LoginPage() {
   const { user, login } = useAuth()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -21,7 +22,10 @@ export function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      await login(username, password)
+      const { mustChangePassword } = await login(username, password)
+      if (mustChangePassword) {
+        navigate('/change-password', { replace: true })
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erreur de connexion. Veuillez réessayer.')
     } finally {
@@ -140,6 +144,12 @@ export function LoginPage() {
                 {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 {loading ? 'Connexion…' : 'Se connecter'}
               </button>
+
+              <div className="text-center">
+                <Link to="/forgot-password" className="text-sm text-brand-600 hover:text-brand-700 hover:underline">
+                  Mot de passe oublié ?
+                </Link>
+              </div>
             </form>
           </div>
 

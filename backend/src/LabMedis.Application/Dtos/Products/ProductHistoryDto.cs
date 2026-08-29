@@ -11,7 +11,9 @@ public record ProductLotDto(
     int QuantityRemaining,
     decimal UnitPurchasePriceXof,
     decimal UnitCostPriceXof,
-    decimal TargetSellingPriceHt
+    decimal TargetSellingPriceHt,
+    decimal MarginRate,
+    decimal CalculatedSellingPriceHt
 );
 
 public record ProductInvoiceLineDto(

@@ -18,6 +18,7 @@ public record ProductDto(
     string? DosageName,
     long? PackagingId,
     string? PackagingName,
+    int? PackagingUnitsPerPackaging,
     long? OriginCountryId,
     string? OriginCountryName,
     long? CustomsRegimeId,

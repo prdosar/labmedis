@@ -8,6 +8,7 @@ interface AuthUser {
   userName: string
   email: string
   fullName: string | null
+  mustChangePassword: boolean
   roles: string[]
 }
 
@@ -18,8 +19,9 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string) => Promise<{ mustChangePassword: boolean }>
   logout: () => void
+  clearMustChangePassword: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -51,11 +53,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userName: resp.userName,
       email: resp.email,
       fullName: resp.fullName,
+      mustChangePassword: resp.mustChangePassword,
       roles: resp.roles,
     }
     localStorage.setItem('lm_token', resp.token)
     localStorage.setItem('lm_user', JSON.stringify(user))
     setState({ user, token: resp.token, isLoading: false })
+    return { mustChangePassword: resp.mustChangePassword }
+  }, [])
+
+  const clearMustChangePassword = useCallback(() => {
+    setState(prev => {
+      if (!prev.user) return prev
+      const updated = { ...prev.user, mustChangePassword: false }
+      localStorage.setItem('lm_user', JSON.stringify(updated))
+      return { ...prev, user: updated }
+    })
   }, [])
 
   const logout = useCallback(() => {
@@ -65,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, clearMustChangePassword }}>
       {children}
     </AuthContext.Provider>
   )

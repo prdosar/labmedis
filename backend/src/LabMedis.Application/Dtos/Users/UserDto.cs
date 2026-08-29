@@ -6,4 +6,5 @@ public record UserDto(
     string Email,
     string? FullName,
     bool IsActive,
+    bool MustChangePassword,
     IReadOnlyList<string> Roles);

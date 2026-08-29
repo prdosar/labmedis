@@ -11,4 +11,5 @@ public interface IUserService
     Task<UserDto?> UpdateAsync(long id, UserUpdateDto dto, CancellationToken cancellationToken = default);
     Task<bool> ChangePasswordAsync(long id, ChangePasswordDto dto, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
+    Task<IList<string>> GetRolesAsync(CancellationToken cancellationToken = default);
 }

@@ -6,6 +6,9 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
+// Allow DateTime with Kind=Unspecified from JSON deserialization to be written to timestamptz columns.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "labmedis-dev-secret-key-min-32-chars!!";

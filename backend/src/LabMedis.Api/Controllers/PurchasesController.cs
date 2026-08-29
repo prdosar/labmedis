@@ -79,4 +79,8 @@ public class PurchasesController : ControllerBase
         var removed = await _service.RemoveTransportAsync(id, lineId, transportTypeId, ct);
         return removed ? NoContent() : NotFound();
     }
+
+    [HttpPatch("lines/{lineId:long}/price")]
+    public async Task<ActionResult<PurchaseLineDto>> UpdateLotPrice(long lineId, [FromBody] UpdateLotPriceDto dto, CancellationToken ct)
+        => Ok(await _service.UpdateLotPriceAsync(lineId, dto, ct));
 }

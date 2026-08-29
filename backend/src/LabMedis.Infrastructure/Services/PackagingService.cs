@@ -44,7 +44,7 @@ public class PackagingService : BaseRepository<Packaging>, IPackagingService
         if (await DbSet.AnyAsync(x => x.Name == name, cancellationToken))
             throw new DomainException($"Un conditionnement '{name}' existe déjà.");
 
-        var entity = new Packaging { Name = name, Description = Trim(dto.Description) };
+        var entity = new Packaging { Name = name, Description = Trim(dto.Description), UnitsPerPackaging = dto.UnitsPerPackaging > 0 ? dto.UnitsPerPackaging : 1 };
         await CreateAsync(entity, cancellationToken);
         _logger.LogInformation("Conditionnement créé Id={Id} Name={Name}", entity.Id, entity.Name);
         return ToDto(entity);
@@ -62,6 +62,7 @@ public class PackagingService : BaseRepository<Packaging>, IPackagingService
 
         entity.Name = name;
         entity.Description = Trim(dto.Description);
+        entity.UnitsPerPackaging = dto.UnitsPerPackaging > 0 ? dto.UnitsPerPackaging : 1;
         await UpdateAsync(entity, cancellationToken);
         return ToDto(entity);
     }
@@ -80,6 +81,6 @@ public class PackagingService : BaseRepository<Packaging>, IPackagingService
     public Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default)
         => base.RestoreAsync(id, cancellationToken);
 
-    private static PackagingDto ToDto(Packaging x) => new(x.Id, x.Name, x.Description, x.CreatedAt, x.UpdatedAt);
+    private static PackagingDto ToDto(Packaging x) => new(x.Id, x.Name, x.Description, x.UnitsPerPackaging, x.CreatedAt, x.UpdatedAt);
     private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 }

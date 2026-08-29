@@ -105,8 +105,15 @@ public class SupplierOrder : BaseEntity
 
     public void MarkGoodsReceived()
     {
-        if (Status != SupplierOrderStatus.FactureReçue)
+        if (Status != SupplierOrderStatus.FactureReçue && Status != SupplierOrderStatus.EnCoursDeRéception)
             throw new DomainException("La réception des marchandises ne peut se faire qu'après enregistrement de la facture fournisseur.");
+        Status = SupplierOrderStatus.EnCoursDeRéception;
+    }
+
+    public void CloseReception()
+    {
+        if (Status != SupplierOrderStatus.EnCoursDeRéception)
+            throw new DomainException("La commande doit être en cours de réception pour être clôturée.");
         Status = SupplierOrderStatus.Réceptionnée;
     }
 

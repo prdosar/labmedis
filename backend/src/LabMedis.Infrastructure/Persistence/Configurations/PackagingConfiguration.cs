@@ -13,6 +13,7 @@ public class PackagingConfiguration : IEntityTypeConfiguration<Packaging>
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Description).HasMaxLength(300);
+        builder.Property(x => x.UnitsPerPackaging).HasDefaultValue(1);
 
         builder.HasIndex(x => x.Name).IsUnique();
     }

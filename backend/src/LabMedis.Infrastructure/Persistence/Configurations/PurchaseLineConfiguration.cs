@@ -17,6 +17,10 @@ public class PurchaseLineConfiguration : IEntityTypeConfiguration<PurchaseLine>
         builder.Property(x => x.UnitPurchasePriceXof).HasPrecision(18, 4);
         builder.Property(x => x.UnitCostPriceXof).HasPrecision(18, 4);
         builder.Property(x => x.TargetSellingPriceHt).HasPrecision(18, 4);
+        builder.Property(x => x.MarginRate).HasPrecision(8, 4);
+        builder.Property(x => x.CalculatedSellingPriceHt).HasPrecision(18, 4);
+
+        builder.Ignore(x => x.GoodUnitsReceived);
 
         builder.HasOne(x => x.Purchase)
             .WithMany(p => p.Lines)

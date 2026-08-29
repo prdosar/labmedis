@@ -3,7 +3,10 @@ namespace LabMedis.Application.Dtos.Purchases;
 public record PurchaseLineCreateDto(
     long ProductId,
     string LotNumber,
-    int Quantity,
-    decimal UnitPurchasePrice,
+    int QuantityCartons,
+    int QuantityLostCartons,
+    int UnitsPerCarton,
+    decimal UnitFobPricePerCarton,
     DateTime? ExpirationDate,
-    decimal TargetSellingPriceHt);
+    decimal MarginRate = 0.10m,
+    decimal? FixedSellingPriceHt = null);

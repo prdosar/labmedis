@@ -6,12 +6,8 @@ public record PurchaseUpdateDto(
     string Reference,
     DateTime PurchaseDate,
     DateTime? ArrivalDate,
+    string TransportMode,
     Currency PurchaseCurrency,
     decimal ExchangeRateToXof,
-    decimal CommissionCoefficient,
-    decimal FreightCoefficient,
-    decimal TransitCoefficient,
-    decimal TransferFeesCoefficient,
-    decimal DefaultMarginCoefficient,
     string? ContainerReference,
     string? Notes);

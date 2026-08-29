@@ -6,28 +6,31 @@ namespace LabMedis.Domain.Entities;
 public class Purchase : BaseEntity
 {
     private readonly List<PurchaseLine> _lines = new();
+    private readonly List<PurchaseCharge> _charges = new();
 
     public string Reference { get; set; } = string.Empty;
     public DateTime PurchaseDate { get; set; }
     public DateTime? ArrivalDate { get; set; }
 
+    public long? SupplierOrderId { get; set; }
+    public string TransportMode { get; set; } = string.Empty;  // Maritime, Aérien, Terrestre
+
     public long SupplierId { get; set; }
     public Supplier? Supplier { get; set; }
 
     public Currency PurchaseCurrency { get; set; } = Currency.EUR;
-
     public decimal ExchangeRateToXof { get; private set; } = 655.957m;
-
-    public decimal CommissionCoefficient { get; private set; } = 1m;
-    public decimal FreightCoefficient { get; private set; } = 1m;
-    public decimal TransitCoefficient { get; private set; } = 1m;
-    public decimal TransferFeesCoefficient { get; private set; } = 1m;
-    public decimal DefaultMarginCoefficient { get; private set; } = 1.10m;
 
     public string? ContainerReference { get; set; }
     public string? Notes { get; set; }
 
     public IReadOnlyCollection<PurchaseLine> Lines => _lines;
+    public IReadOnlyCollection<PurchaseCharge> Charges => _charges;
+
+    public decimal TotalFobXof => _lines.Sum(l => l.UnitPurchasePriceXof * l.Quantity);
+    public decimal TotalChargesXof => _charges.Sum(c => c.AmountXof);
+    public int TotalGoodUnits => _lines.Sum(l => l.GoodUnitsReceived);
+    public int TotalLostCartons => _lines.Sum(l => l.QuantityLostCartons);
 
     public void SetExchangeRate(decimal rate)
     {
@@ -36,38 +39,18 @@ public class Purchase : BaseEntity
         ExchangeRateToXof = rate;
         foreach (var line in _lines)
             line.RecalculateFromParent(this);
-    }
-
-    public void SetCoefficients(
-        decimal commission,
-        decimal freight,
-        decimal transit,
-        decimal transferFees,
-        decimal defaultMargin)
-    {
-        EnsurePositive(commission, nameof(commission));
-        EnsurePositive(freight, nameof(freight));
-        EnsurePositive(transit, nameof(transit));
-        EnsurePositive(transferFees, nameof(transferFees));
-        EnsurePositive(defaultMargin, nameof(defaultMargin));
-
-        CommissionCoefficient = commission;
-        FreightCoefficient = freight;
-        TransitCoefficient = transit;
-        TransferFeesCoefficient = transferFees;
-        DefaultMarginCoefficient = defaultMargin;
-
-        foreach (var line in _lines)
-            line.RecalculateFromParent(this);
+        RecalculateCosts();
     }
 
     public PurchaseLine AddLine(
         Product product,
         string lotNumber,
-        int quantity,
-        decimal unitPurchasePrice,
+        int quantityCartons,
+        int quantityLostCartons,
+        int unitsPerCarton,
+        decimal unitFobPricePerCarton,
         DateTime? expirationDate = null,
-        decimal targetSellingPriceHt = 0m)
+        decimal marginRate = 0.10m)
     {
         if (product is null)
             throw new DomainException("Le produit est obligatoire pour ajouter une ligne d'arrivage.");
@@ -75,40 +58,56 @@ public class Purchase : BaseEntity
         var normalizedLot = (lotNumber ?? string.Empty).Trim();
         if (normalizedLot.Length == 0)
             throw new DomainException("Le numéro de lot est obligatoire à la saisie d'un arrivage.");
-        if (quantity <= 0)
-            throw new DomainException("La quantité d'un lot doit être strictement positive.");
-        if (unitPurchasePrice < 0)
-            throw new DomainException("Le prix d'achat unitaire ne peut pas être négatif.");
-        if (targetSellingPriceHt < 0)
-            throw new DomainException("Le prix de vente cible ne peut pas être négatif.");
+        if (quantityCartons <= 0)
+            throw new DomainException("La quantité de cartons doit être strictement positive.");
+        if (quantityLostCartons < 0 || quantityLostCartons > quantityCartons)
+            throw new DomainException("Le nombre de cartons perdus doit être compris entre 0 et la quantité reçue.");
+        if (unitsPerCarton <= 0)
+            throw new DomainException("Le nombre d'unités par carton doit être strictement positif.");
+        if (unitFobPricePerCarton < 0)
+            throw new DomainException("Le prix FOB ne peut pas être négatif.");
 
         if (_lines.Any(l => l.ProductId == product.Id
                             && string.Equals(l.LotNumber, normalizedLot, StringComparison.OrdinalIgnoreCase)))
             throw new DomainException($"Le lot '{normalizedLot}' existe déjà pour ce produit dans cet arrivage.");
 
         var line = new PurchaseLine();
-        line.InitializeForPurchase(this, product, normalizedLot, quantity, unitPurchasePrice, expirationDate, targetSellingPriceHt);
+        line.InitializeForPurchase(this, product, normalizedLot, quantityCartons, quantityLostCartons,
+            unitsPerCarton, unitFobPricePerCarton, expirationDate, marginRate);
         _lines.Add(line);
         return line;
     }
 
-    /// <summary>PA (devise arrivage) → XOF × commission × freight × transit × frais transfert.</summary>
-    public decimal ComputeUnitCostPriceXof(decimal unitPurchasePriceInPurchaseCurrency)
+    public void AddCharge(PurchaseCharge charge)
     {
-        if (unitPurchasePriceInPurchaseCurrency < 0)
-            throw new DomainException("Le prix d'achat ne peut pas être négatif.");
-
-        var xofBase = unitPurchasePriceInPurchaseCurrency * ExchangeRateToXof;
-        return xofBase
-            * CommissionCoefficient
-            * FreightCoefficient
-            * TransitCoefficient
-            * TransferFeesCoefficient;
+        _charges.Add(charge);
+        RecalculateCosts();
     }
 
-    private static void EnsurePositive(decimal value, string label)
+    /// <summary>
+    /// Distributes total charges proportionally across lines based on FOB value.
+    /// Updates UnitCostPriceXof on each line to reflect the true landed cost per unit.
+    /// </summary>
+    public void RecalculateCosts()
     {
-        if (value <= 0)
-            throw new DomainException($"Le coefficient '{label}' doit être strictement positif.");
+        var totalFobXof = _lines.Sum(l => l.UnitPurchasePriceXof * l.Quantity);
+        var totalCharges = _charges.Sum(c => c.AmountXof);
+
+        foreach (var line in _lines)
+        {
+            if (line.GoodUnitsReceived <= 0)
+            {
+                line.SetCostPrice(0m);
+                continue;
+            }
+
+            var lineFobXof = line.UnitPurchasePriceXof * line.Quantity;
+            var proportionalCharges = totalFobXof > 0
+                ? lineFobXof / totalFobXof * totalCharges
+                : (_lines.Count > 0 ? totalCharges / _lines.Count : 0m);
+
+            var totalLineCost = lineFobXof + proportionalCharges;
+            line.SetCostPrice(Math.Round(totalLineCost / line.GoodUnitsReceived, 4));
+        }
     }
 }

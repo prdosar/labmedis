@@ -26,6 +26,7 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
             .Include(p => p.Supplier)
             .Include(p => p.Lines).ThenInclude(l => l.Product)
             .Include(p => p.Lines).ThenInclude(l => l.Transports).ThenInclude(t => t.TransportType)
+            .Include(p => p.Charges)
             .OrderByDescending(p => p.PurchaseDate)
             .Skip(skip).Take(size)
             .ToListAsync(cancellationToken);
@@ -52,14 +53,14 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
             Reference = reference,
             PurchaseDate = dto.PurchaseDate,
             ArrivalDate = dto.ArrivalDate,
+            SupplierOrderId = dto.SupplierOrderId,
+            TransportMode = dto.TransportMode?.Trim() ?? string.Empty,
             SupplierId = dto.SupplierId,
             PurchaseCurrency = dto.PurchaseCurrency,
             ContainerReference = Trim(dto.ContainerReference),
             Notes = Trim(dto.Notes)
         };
         entity.SetExchangeRate(dto.ExchangeRateToXof);
-        entity.SetCoefficients(dto.CommissionCoefficient, dto.FreightCoefficient, dto.TransitCoefficient,
-            dto.TransferFeesCoefficient, dto.DefaultMarginCoefficient);
 
         await CreateAsync(entity, cancellationToken);
         _logger.LogInformation("Arrivage créé Id={Id} Reference={Reference}", entity.Id, entity.Reference);
@@ -79,12 +80,11 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
         entity.Reference = reference;
         entity.PurchaseDate = dto.PurchaseDate;
         entity.ArrivalDate = dto.ArrivalDate;
+        entity.TransportMode = dto.TransportMode?.Trim() ?? string.Empty;
         entity.PurchaseCurrency = dto.PurchaseCurrency;
         entity.ContainerReference = Trim(dto.ContainerReference);
         entity.Notes = Trim(dto.Notes);
         entity.SetExchangeRate(dto.ExchangeRateToXof);
-        entity.SetCoefficients(dto.CommissionCoefficient, dto.FreightCoefficient, dto.TransitCoefficient,
-            dto.TransferFeesCoefficient, dto.DefaultMarginCoefficient);
 
         await UpdateAsync(entity, cancellationToken);
         return ToDto(entity);
@@ -109,8 +109,15 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
         var product = await DbContext.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId, cancellationToken)
             ?? throw new DomainException($"Produit introuvable (Id={dto.ProductId}).");
 
-        var line = purchase.AddLine(product, dto.LotNumber, dto.Quantity, dto.UnitPurchasePrice,
-            dto.ExpirationDate, dto.TargetSellingPriceHt);
+        var unitsPerCarton = dto.UnitsPerCarton > 0 ? dto.UnitsPerCarton : 1;
+        var lostCartons = Math.Max(0, dto.QuantityLostCartons);
+
+        var line = purchase.AddLine(
+            product, dto.LotNumber,
+            dto.QuantityCartons, lostCartons, unitsPerCarton,
+            dto.UnitFobPricePerCarton,
+            dto.ExpirationDate, dto.MarginRate);
+        line.SetFinalSellingPrice(dto.FixedSellingPriceHt);
 
         await UpdateAsync(purchase, cancellationToken);
         _logger.LogInformation("Ligne ajoutée à l'arrivage Id={PurchaseId} LotNumber={Lot}", purchaseId, line.LotNumber);
@@ -178,20 +185,33 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
         return true;
     }
 
+    public async Task<PurchaseLineDto> UpdateLotPriceAsync(long lineId, UpdateLotPriceDto dto, CancellationToken cancellationToken = default)
+    {
+        var line = await DbContext.PurchaseLines
+            .FirstOrDefaultAsync(l => l.Id == lineId && !l.IsDeleted, cancellationToken)
+            ?? throw new DomainException($"Lot introuvable (Id={lineId}).");
+
+        line.UpdatePricing(dto.MarginRate, dto.FixedSellingPriceHt);
+        await DbContext.SaveChangesAsync(cancellationToken);
+        return ToLineDto(line);
+    }
+
     private async Task<Purchase?> LoadAggregateAsync(long id, CancellationToken ct)
         => await DbSet
             .Include(p => p.Supplier)
             .Include(p => p.Lines).ThenInclude(l => l.Product)
             .Include(p => p.Lines).ThenInclude(l => l.Transports).ThenInclude(t => t.TransportType)
+            .Include(p => p.Charges)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     private static PurchaseDto ToDto(Purchase p) => new(
         p.Id, p.Reference, p.PurchaseDate, p.ArrivalDate,
+        p.SupplierOrderId, p.TransportMode,
         p.SupplierId, p.Supplier?.Name,
         p.PurchaseCurrency, p.ExchangeRateToXof,
-        p.CommissionCoefficient, p.FreightCoefficient, p.TransitCoefficient,
-        p.TransferFeesCoefficient, p.DefaultMarginCoefficient,
         p.ContainerReference, p.Notes,
+        p.TotalFobXof, p.TotalChargesXof,
+        p.TotalGoodUnits, p.TotalLostCartons,
         p.Lines.Select(ToLineDto).ToList(),
         p.CreatedAt, p.UpdatedAt);
 
@@ -199,9 +219,10 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
         l.Id, l.PurchaseId, l.ProductId,
         l.Product?.Code, l.Product?.Designation,
         l.LotNumber, l.ExpirationDate,
-        l.Quantity, l.QuantityRemaining,
+        l.Quantity, l.QuantityLostCartons, l.UnitsPerCarton, l.GoodUnitsReceived,
+        l.QuantityRemaining,
         l.UnitPurchasePrice, l.UnitPurchasePriceXof, l.UnitCostPriceXof,
-        l.TargetSellingPriceHt,
+        l.TargetSellingPriceHt, l.MarginRate, l.CalculatedSellingPriceHt,
         l.Transports.Select(ToTransportDto).ToList());
 
     private static PurchaseLineTransportDto ToTransportDto(PurchaseLineTransport t) => new(

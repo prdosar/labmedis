@@ -6,5 +6,6 @@ public record TokenResponseDto(
     string UserName,
     string Email,
     string? FullName,
+    bool MustChangePassword,
     IReadOnlyList<string> Roles,
     DateTime ExpiresAt);

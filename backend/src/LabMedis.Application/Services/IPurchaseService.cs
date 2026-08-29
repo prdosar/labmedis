@@ -17,4 +17,6 @@ public interface IPurchaseService
     Task<PurchaseLineTransportDto> AddTransportAsync(long purchaseId, long lineId, PurchaseLineTransportCreateDto dto, CancellationToken cancellationToken = default);
     Task<PurchaseLineTransportDto?> UpdateTransportAsync(long purchaseId, long lineId, long transportTypeId, PurchaseLineTransportUpdateDto dto, CancellationToken cancellationToken = default);
     Task<bool> RemoveTransportAsync(long purchaseId, long lineId, long transportTypeId, CancellationToken cancellationToken = default);
+
+    Task<PurchaseLineDto> UpdateLotPriceAsync(long lineId, UpdateLotPriceDto dto, CancellationToken cancellationToken = default);
 }

@@ -17,6 +17,10 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<PagedResult<UserDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
         => Ok(await _service.GetAllAsync(page, size, ct));
 
+    [HttpGet("roles")]
+    public async Task<ActionResult<IList<string>>> GetRoles(CancellationToken ct)
+        => Ok(await _service.GetRolesAsync(ct));
+
     [HttpGet("{id:long}")]
     public async Task<ActionResult<UserDto>> GetById(long id, CancellationToken ct)
     {

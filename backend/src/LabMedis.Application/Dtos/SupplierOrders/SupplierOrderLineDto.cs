@@ -10,4 +10,5 @@ public record SupplierOrderLineDto(
     int Quantity,
     string OrderUnit,
     int? UnitsPerCarton,
+    int? PackagingUnitsPerPackaging,
     decimal? UnitFobPrice);

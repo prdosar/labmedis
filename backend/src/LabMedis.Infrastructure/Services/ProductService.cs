@@ -134,7 +134,9 @@ public class ProductService : BaseRepository<Product>, IProductService
                 pl.QuantityRemaining,
                 pl.UnitPurchasePriceXof,
                 pl.UnitCostPriceXof,
-                pl.TargetSellingPriceHt))
+                pl.TargetSellingPriceHt,
+                pl.MarginRate,
+                pl.CalculatedSellingPriceHt))
             .ToListAsync(cancellationToken);
 
         var invoiceLines = await DbContext.InvoiceLines
@@ -335,7 +337,7 @@ public class ProductService : BaseRepository<Product>, IProductService
         p.TherapeuticClassId, p.TherapeuticClass?.Name,
         p.ProductFormId, p.ProductForm?.Name,
         p.DosageId, p.Dosage?.Name,
-        p.PackagingId, p.Packaging?.Name,
+        p.PackagingId, p.Packaging?.Name, p.Packaging?.UnitsPerPackaging,
         p.OriginCountryId, p.OriginCountry?.Name,
         p.CustomsRegimeId, p.CustomsRegime?.Name,
         p.SupplierId, p.Supplier?.Name,

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import type { UserDto } from '../../api/types'
 import { usersApi } from '../../api/endpoints'
@@ -12,18 +12,23 @@ import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { Badge } from '../../components/ui/Badge'
 
-interface CreateForm { userName: string; email: string; password: string; fullName: string; roles: string }
-interface EditForm { email: string; fullName: string; isActive: boolean; roles: string }
-
-const AVAILABLE_ROLES = ['Admin', 'Gestionnaire', 'Commercial', 'Technicien', 'Caissier']
+interface CreateForm { userName: string; email: string; fullName: string; role: string }
+interface EditForm { email: string; fullName: string; isActive: boolean; role: string }
 
 const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+
+const selectClass = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white'
 
 export function UsersPage() {
   const { toast } = useToast()
   const fetcher = useCallback((p: number, s: number) => usersApi.getAll(p, s), [])
   const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 100 })
   const [search, setSearch] = useState('')
+  const [availableRoles, setAvailableRoles] = useState<string[]>([])
+
+  useEffect(() => {
+    usersApi.getRoles().then(setAvailableRoles).catch(() => {})
+  }, [])
   const filtered = (data?.items ?? []).filter(r =>
     r.userName.toLowerCase().includes(search.toLowerCase()) ||
     r.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -32,8 +37,8 @@ export function UsersPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<UserDto | null>(null)
-  const [createForm, setCreateForm] = useState<CreateForm>({ userName: '', email: '', password: '', fullName: '', roles: '' })
-  const [editForm, setEditForm] = useState<EditForm>({ email: '', fullName: '', isActive: true, roles: '' })
+  const [createForm, setCreateForm] = useState<CreateForm>({ userName: '', email: '', fullName: '', role: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ email: '', fullName: '', isActive: true, role: '' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null)
@@ -41,21 +46,21 @@ export function UsersPage() {
 
   function openEdit(u: UserDto) {
     setEditTarget(u)
-    setEditForm({ email: u.email, fullName: u.fullName ?? '', isActive: u.isActive, roles: u.roles.join(', ') })
+    setEditForm({ email: u.email, fullName: u.fullName ?? '', isActive: u.isActive, role: u.roles[0] ?? '' })
     setFormError(null)
   }
 
   async function handleCreate() {
-    if (!createForm.userName.trim() || !createForm.email.trim() || !createForm.password.trim()) {
-      setFormError('Identifiant, email et mot de passe sont obligatoires.'); return
+    if (!createForm.userName.trim() || !createForm.email.trim()) {
+      setFormError('Identifiant et email sont obligatoires.'); return
     }
+    if (!createForm.role) { setFormError('Veuillez sélectionner un rôle.'); return }
     setSaving(true); setFormError(null)
     try {
-      const roles = createForm.roles.split(',').map(r => r.trim()).filter(Boolean)
-      await usersApi.create({ userName: createForm.userName.trim(), email: createForm.email.trim(), password: createForm.password, fullName: createForm.fullName || null, roles })
-      toast('Utilisateur créé.')
+      await usersApi.create({ userName: createForm.userName.trim(), email: createForm.email.trim(), fullName: createForm.fullName || null, roles: [createForm.role] })
+      toast('Utilisateur créé — un email d\'invitation a été envoyé.')
       setCreateOpen(false)
-      setCreateForm({ userName: '', email: '', password: '', fullName: '', roles: '' })
+      setCreateForm({ userName: '', email: '', fullName: '', role: '' })
       refresh()
     } catch (e) { setFormError(e instanceof ApiError ? e.message : 'Erreur.') }
     finally { setSaving(false) }
@@ -63,10 +68,10 @@ export function UsersPage() {
 
   async function handleUpdate() {
     if (!editTarget || !editForm.email.trim()) { setFormError('Email obligatoire.'); return }
+    if (!editForm.role) { setFormError('Veuillez sélectionner un rôle.'); return }
     setSaving(true); setFormError(null)
     try {
-      const roles = editForm.roles.split(',').map(r => r.trim()).filter(Boolean)
-      await usersApi.update(editTarget.id, { email: editForm.email.trim(), fullName: editForm.fullName || null, isActive: editForm.isActive, roles })
+      await usersApi.update(editTarget.id, { email: editForm.email.trim(), fullName: editForm.fullName || null, isActive: editForm.isActive, roles: [editForm.role] })
       toast('Utilisateur mis à jour.')
       setEditTarget(null); refresh()
     } catch (e) { setFormError(e instanceof ApiError ? e.message : 'Erreur.') }
@@ -137,11 +142,15 @@ export function UsersPage() {
             <Input label="Nom complet" value={createForm.fullName} onChange={e => setCreateForm(f => ({ ...f, fullName: e.target.value }))} />
           </div>
           <Input label="Email *" type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} />
-          <Input label="Mot de passe *" type="password" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} placeholder="Minimum 8 caractères" />
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">Rôles (séparés par virgule)</label>
-            <p className="text-xs text-gray-400 mb-2">Disponibles : {AVAILABLE_ROLES.join(', ')}</p>
-            <Input value={createForm.roles} onChange={e => setCreateForm(f => ({ ...f, roles: e.target.value }))} placeholder="Admin, Gestionnaire" />
+          <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            Un mot de passe temporaire sera généré et envoyé à l'adresse email fournie.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Rôle *</label>
+            <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} className={selectClass}>
+              <option value="">— Sélectionner un rôle —</option>
+              {availableRoles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Annuler</Button>
@@ -164,9 +173,12 @@ export function UsersPage() {
               <option value="0">Inactif</option>
             </select>
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">Rôles (séparés par virgule)</label>
-            <Input value={editForm.roles} onChange={e => setEditForm(f => ({ ...f, roles: e.target.value }))} placeholder="Admin, Gestionnaire" />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Rôle *</label>
+            <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))} className={selectClass}>
+              <option value="">— Sélectionner un rôle —</option>
+              {availableRoles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setEditTarget(null)}>Annuler</Button>

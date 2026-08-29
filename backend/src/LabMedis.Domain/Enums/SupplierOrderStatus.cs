@@ -10,4 +10,5 @@ public enum SupplierOrderStatus
     ProformaValidée = 5,
     FactureReçue = 6,
     Réceptionnée = 7,
+    EnCoursDeRéception = 8,
 }

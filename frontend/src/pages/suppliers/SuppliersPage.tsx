@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X, Eye } from 'lucide-react'
 import type { SupplierDto, CountryDto } from '../../api/types'
 import { suppliersApi, countriesApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -29,6 +30,7 @@ function toForm(s: SupplierDto): Form {
 const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
 export function SuppliersPage() {
+  const navigate = useNavigate()
   const { toast } = useToast()
   const [showDeleted, setShowDeleted] = useState(false)
   const fetcher = useCallback((p: number, s: number) => suppliersApi.getAll(p, s, showDeleted), [showDeleted])
@@ -126,6 +128,7 @@ export function SuppliersPage() {
         actions={row => row.isDeleted ? (
           <button title="Restaurer" onClick={async () => { await suppliersApi.restore(row.id); toast('Restauré.'); refresh() }} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"><RotateCcw size={14} /></button>
         ) : (<>
+          <button title="Détails" onClick={() => navigate(`/suppliers/${row.id}`)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Eye size={14} /></button>
           <button title="Modifier" onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"><Pencil size={14} /></button>
           <button title="Supprimer" onClick={() => setDeleteTarget(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
         </>)}

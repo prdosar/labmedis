@@ -15,4 +15,8 @@ public record ManualJournalEntryInput(
     string Description,
     string? AttachmentFileName,
     string? AttachmentPath,
-    IReadOnlyList<ManualJournalLineInput> Lines);
+    IReadOnlyList<ManualJournalLineInput> Lines,
+    /// <summary>Optionnel : rattacher cette OD à un arrivage spécifique pour alimenter son prix de revient.</summary>
+    long? PurchaseId,
+    /// <summary>Type de charge (Douane, Fret, TransportLocal, Chargement, Autres) — requis si PurchaseId est renseigné.</summary>
+    string? ChargeType);

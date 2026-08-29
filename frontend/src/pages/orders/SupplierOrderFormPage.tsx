@@ -7,7 +7,8 @@ import { suppliersApi, productsApi, supplierOrdersApi } from '../../api/endpoint
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
-import { ComboSelect } from '../../components/ui/Input'
+import { ComboSelect, Input } from '../../components/ui/Input'
+import { Modal } from '../../components/ui/Modal'
 
 // Grid template for order lines: product | qty | unit | boites/carton | delete
 const GRID_TPL = '1fr 5rem 7rem 7rem 2rem'
@@ -26,13 +27,6 @@ const emptyLine = (): LineInput => ({
   unitsPerCarton: '',
 })
 
-/** Try to extract units-per-carton from packaging name, e.g. "Boîte 400g X 12" → 12 */
-function parseUnitsPerCarton(packagingName: string | null | undefined): string {
-  if (!packagingName) return ''
-  const match = packagingName.match(/[Xx×]\s*(\d+)/)
-  if (match) return match[1]
-  return ''
-}
 
 export function SupplierOrderFormPage() {
   const { id } = useParams<{ id?: string }>()
@@ -52,6 +46,9 @@ export function SupplierOrderFormPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailOverride, setEmailOverride] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   // Reference info for the existing order (edit mode)
   const [orderRef, setOrderRef] = useState('')
@@ -97,7 +94,7 @@ export function SupplierOrderFormPage() {
 
   function handleProductChange(idx: number, productId: string) {
     const product = products.find(p => String(p.id) === productId)
-    const autoUnits = product ? parseUnitsPerCarton(product.packagingName) : ''
+    const autoUnits = product?.packagingUnitsPerPackaging ? String(product.packagingUnitsPerPackaging) : ''
     setLines(prev =>
       prev.map((l, i) =>
         i === idx ? { ...l, productId, unitsPerCarton: autoUnits } : l,
@@ -143,6 +140,21 @@ export function SupplierOrderFormPage() {
       setFormError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!isEdit || !id) return
+    setSendingEmail(true)
+    try {
+      await supplierOrdersApi.sendEmail(Number(id), emailOverride.trim() || null)
+      toast('Bon de commande envoyé par email.')
+      setEmailDialogOpen(false)
+      setEmailOverride('')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Erreur lors de l'envoi.", 'error')
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -246,6 +258,26 @@ export function SupplierOrderFormPage() {
         </div>
       </div>
 
+      {/* ── Email dialog ── */}
+      <Modal isOpen={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} title="Envoyer par email" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600">
+            L'email du fournisseur sera utilisé par défaut. Vous pouvez saisir un destinataire différent ci-dessous.
+          </p>
+          <Input
+            label="Destinataire (optionnel)"
+            type="email"
+            value={emailOverride}
+            onChange={e => setEmailOverride(e.target.value)}
+            placeholder={selectedSupplier?.email ?? 'email@fournisseur.com'}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setEmailDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSendEmail} loading={sendingEmail} icon={<Mail size={14} />}>Envoyer</Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* ── Screen layout ── */}
       <div className="flex flex-col gap-5 print:hidden">
         <div className="flex items-center justify-between">
@@ -275,7 +307,7 @@ export function SupplierOrderFormPage() {
                 <Printer size={13} /> Imprimer
               </button>
               <button
-                onClick={() => toast('Configuration email requise — les paramètres seront fournis ultérieurement.', 'info')}
+                onClick={() => setEmailDialogOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-300 bg-white text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
               >
                 <Mail size={13} /> Envoyer par email
@@ -495,7 +527,7 @@ export function SupplierOrderFormPage() {
                 Imprimer
               </button>
               <button
-                onClick={() => toast("Configuration email requise — les paramètres seront fournis ultérieurement.", 'info')}
+                onClick={() => setEmailDialogOpen(true)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <Mail size={15} />
