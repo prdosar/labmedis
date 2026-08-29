@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { Scale, Calendar } from 'lucide-react'
 import type { TrialBalanceLineDto } from '../../api/types'
 import { accountingApi } from '../../api/endpoints'
+import { fmtNum } from '../../utils/format'
 
 const classLabel: Record<string, string> = {
   Asset: 'Actif',
@@ -23,9 +24,7 @@ const classBadge: Record<string, string> = {
 
 const inputClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
-}
+const fmt = (n: number) => fmtNum(n)
 
 export function TrialBalancePage() {
   const [from, setFrom] = useState('')

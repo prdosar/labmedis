@@ -10,6 +10,7 @@ import { DataTable } from '../../components/ui/DataTable'
 import { Pagination } from '../../components/ui/Pagination'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/Modal'
+import { fmtXof } from '../../utils/format'
 
 const STATUS_LABELS: Record<string, string> = {
   EnAttente: 'En attente',
@@ -29,9 +30,6 @@ const STATUSES = ['', 'EnAttente', 'Validée', 'Terminée', 'Annulée']
 
 const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
-function fmt(n: number) {
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' F'
-}
 
 export function CustomerOrdersPage() {
   const { toast } = useToast()
@@ -134,7 +132,7 @@ export function CustomerOrdersPage() {
             key: 'customer', header: 'Client', render: r => (
               <div>
                 <p className="font-medium text-gray-900">{r.customerName}</p>
-                <p className="text-xs text-gray-400">Solde : {fmt(r.customerBalance)}</p>
+                <p className="text-xs text-gray-400">Solde : {fmtXof(r.customerBalance)}</p>
               </div>
             ),
           },
@@ -154,18 +152,18 @@ export function CustomerOrdersPage() {
           },
           {
             key: 'totalHt', header: 'Total HT', width: 'w-28', render: r => (
-              <span className="text-right block text-gray-800">{fmt(r.totalHt)}</span>
+              <span className="text-right block text-gray-800">{fmtXof(r.totalHt)}</span>
             ),
           },
           {
             key: 'totalTtc', header: 'Total TTC', width: 'w-28', render: r => (
-              <span className="text-right block font-semibold text-gray-900">{fmt(r.totalTtc)}</span>
+              <span className="text-right block font-semibold text-gray-900">{fmtXof(r.totalTtc)}</span>
             ),
           },
           {
             key: 'profit', header: 'Bénéfice', width: 'w-28', render: r => (
               <span className={`text-right block text-xs font-medium ${r.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {fmt(r.profit)}
+                {fmtXof(r.profit)}
               </span>
             ),
           },

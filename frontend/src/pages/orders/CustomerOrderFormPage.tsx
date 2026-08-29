@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { ComboSelect } from '../../components/ui/Input'
+import { fmtXof } from '../../utils/format'
 
 interface LineInput {
   productId: string
@@ -16,9 +17,6 @@ interface LineInput {
 
 const emptyLine = (): LineInput => ({ productId: '', quantity: '1', availableStock: 0 })
 
-function fmt(n: number) {
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' F'
-}
 
 // Grid template: with or without TVA columns
 const gridTpl = (vat: boolean) =>
@@ -189,7 +187,7 @@ export function CustomerOrderFormPage() {
                     <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 flex flex-col gap-0.5">
                       <span className="text-xs text-gray-400">Solde</span>
                       <span className={`text-xs font-semibold ${customerStats.balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-                        {fmt(customerStats.balance)}
+                        {fmtXof(customerStats.balance)}
                       </span>
                     </div>
                     <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 flex flex-col gap-0.5">
@@ -198,7 +196,7 @@ export function CustomerOrderFormPage() {
                     </div>
                     <div className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 flex flex-col gap-0.5">
                       <span className="text-xs text-gray-400 truncate">CA {monthLabel}</span>
-                      <span className="text-xs font-semibold text-brand-700">{fmt(customerStats.monthlyRevenueTtc)}</span>
+                      <span className="text-xs font-semibold text-brand-700">{fmtXof(customerStats.monthlyRevenueTtc)}</span>
                     </div>
                   </div>
                 )}
@@ -323,7 +321,7 @@ export function CustomerOrderFormPage() {
                     {/* Prix HT */}
                     <div className="py-2 text-right">
                       {pl
-                        ? <span className="text-sm font-semibold text-gray-900">{fmt(pl.lineTotalHt)}</span>
+                        ? <span className="text-sm font-semibold text-gray-900">{fmtXof(pl.lineTotalHt)}</span>
                         : <span className="text-gray-300">—</span>
                       }
                     </div>
@@ -332,7 +330,7 @@ export function CustomerOrderFormPage() {
                     {vatApplied && (
                       <div className="py-2 text-right">
                         {pl
-                          ? <span className="text-sm text-gray-500">{fmt(pl.lineTotalTva)}</span>
+                          ? <span className="text-sm text-gray-500">{fmtXof(pl.lineTotalTva)}</span>
                           : <span className="text-gray-300">—</span>
                         }
                       </div>
@@ -342,7 +340,7 @@ export function CustomerOrderFormPage() {
                     {vatApplied && (
                       <div className="py-2 text-right">
                         {pl
-                          ? <span className="text-sm font-semibold text-brand-700">{fmt(pl.lineTotalTtc)}</span>
+                          ? <span className="text-sm font-semibold text-brand-700">{fmtXof(pl.lineTotalTtc)}</span>
                           : <span className="text-gray-300">—</span>
                         }
                       </div>
@@ -373,17 +371,17 @@ export function CustomerOrderFormPage() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">Total HT</span>
-                  <span className="text-sm font-semibold text-gray-900">{fmt(preview.totalHt)}</span>
+                  <span className="text-sm font-semibold text-gray-900">{fmtXof(preview.totalHt)}</span>
                 </div>
                 {vatApplied && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500">TVA 18%</span>
-                    <span className="text-sm text-gray-600">{fmt(preview.totalTva)}</span>
+                    <span className="text-sm text-gray-600">{fmtXof(preview.totalTva)}</span>
                   </div>
                 )}
                 <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-800">Total TTC</span>
-                  <span className="text-base font-bold text-brand-700">{fmt(preview.totalTtc)}</span>
+                  <span className="text-base font-bold text-brand-700">{fmtXof(preview.totalTtc)}</span>
                 </div>
               </div>
             ) : (

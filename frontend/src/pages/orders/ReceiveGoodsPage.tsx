@@ -6,6 +6,7 @@ import { supplierOrdersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
+import { fmtXof, fmtNum } from '../../utils/format'
 
 const EUR_XOF = 655.957
 
@@ -145,8 +146,6 @@ export function ReceiveGoodsPage() {
     }
   }
 
-  const fmt2 = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const fmt4 = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
 
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Chargement…</div>
   if (!order) return null
@@ -350,7 +349,7 @@ export function ReceiveGoodsPage() {
                     />
                     <div className="text-sm font-medium text-right">
                       {pa > 0 ? (
-                        <span className="text-gray-900">{fmt4(pa)}</span>
+                        <span className="text-gray-900">{fmtNum(pa, 2)}</span>
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}
@@ -381,7 +380,7 @@ export function ReceiveGoodsPage() {
               <div className="mt-3 text-xs text-gray-500">
                 <p>Facture : <strong>{order.invoice.invoiceReference}</strong></p>
                 <p className="mt-1">
-                  {fmt2(order.invoice.totalAmountXof)} XOF
+                  {fmtXof(order.invoice.totalAmountXof)}
                 </p>
               </div>
             )}
@@ -404,7 +403,7 @@ export function ReceiveGoodsPage() {
                   <div className="text-gray-700 font-medium truncate">{line.productDesignation}</div>
                   <div className="flex justify-between text-gray-500 mt-0.5">
                     <span>PA × {qty}</span>
-                    <span>{pa > 0 && qty > 0 ? `${fmt2(pa * qty)} XOF` : '—'}</span>
+                    <span>{pa > 0 && qty > 0 ? fmtXof(pa * qty) : '—'}</span>
                   </div>
                 </div>
               )
@@ -413,10 +412,10 @@ export function ReceiveGoodsPage() {
               <div className="flex justify-between text-sm font-semibold border-t border-gray-200 pt-3">
                 <span className="text-gray-800">Total PA</span>
                 <span className="text-gray-900">
-                  {fmt2(lines.reduce((acc, l) => {
+                  {fmtXof(lines.reduce((acc, l) => {
                     const pa = computePA(l.unitFobPrice, exchangeRateToXof, commissionCoefficient, freightCoefficient, transitCoefficient, transferFeesCoefficient)
                     return acc + pa * (Number(l.quantity) || 0)
-                  }, 0))} XOF
+                  }, 0))}
                 </span>
               </div>
             )}

@@ -3,11 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Package, TrendingDown, TrendingUp, RotateCcw, AlertTriangle, ShoppingCart, Truck } from 'lucide-react'
 import type { ProductHistoryDto } from '../../api/types'
 import { productsApi } from '../../api/endpoints'
+import { fmtXof } from '../../utils/format'
 
 type Tab = 'lots' | 'clients' | 'mouvements'
 
-const xof = (v: number) =>
-  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v) + ' XOF'
 
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -221,9 +220,9 @@ export function ProductDetailPage() {
                             {lot.quantityRemaining}
                           </span>
                         </td>
-                        <td className={`${td} text-right text-gray-600`}>{xof(lot.unitPurchasePriceXof)}</td>
-                        <td className={`${td} text-right text-gray-600`}>{xof(lot.unitCostPriceXof)}</td>
-                        <td className={`${td} text-right font-medium text-brand-700`}>{xof(lot.targetSellingPriceHt)}</td>
+                        <td className={`${td} text-right text-gray-600`}>{fmtXof(lot.unitPurchasePriceXof)}</td>
+                        <td className={`${td} text-right text-gray-600`}>{fmtXof(lot.unitCostPriceXof)}</td>
+                        <td className={`${td} text-right font-medium text-brand-700`}>{fmtXof(lot.targetSellingPriceHt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -260,10 +259,10 @@ export function ProductDetailPage() {
                           </span>
                         </td>
                         <td className={`${td} text-right font-medium`}>{il.quantity}</td>
-                        <td className={`${td} text-right`}>{xof(il.unitPriceHt)}</td>
+                        <td className={`${td} text-right`}>{fmtXof(il.unitPriceHt)}</td>
                         <td className={`${td} text-right text-gray-500`}>{il.discountPercent > 0 ? `${il.discountPercent}%` : '—'}</td>
-                        <td className={`${td} text-right`}>{xof(il.totalHt)}</td>
-                        <td className={`${td} text-right font-medium text-brand-700`}>{xof(il.totalTtc)}</td>
+                        <td className={`${td} text-right`}>{fmtXof(il.totalHt)}</td>
+                        <td className={`${td} text-right font-medium text-brand-700`}>{fmtXof(il.totalTtc)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -6,6 +6,7 @@ import { supplierOrdersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
+import { fmtXof, fmtForeign } from '../../utils/format'
 
 const EUR_XOF = 655.957
 
@@ -188,10 +189,6 @@ export function ReceiveInvoicePage() {
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Chargement…</div>
   if (!order) return null
 
-  const fmt = (n: number) =>
-    n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  const fmtF = (n: number) =>
-    n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   return (
     <div className="flex flex-col gap-5">
@@ -374,8 +371,8 @@ export function ReceiveInvoicePage() {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Total brut</span>
                 <div className="text-right">
-                  {showForeign && tf > 0 && <div className="text-xs text-gray-400">{fmtF(tf)} {currency}</div>}
-                  <div className="font-medium text-gray-900">{fmt(tx)} XOF</div>
+                  {showForeign && tf > 0 && <div className="text-xs text-gray-400">{fmtForeign(tf, currency)}</div>}
+                  <div className="font-medium text-gray-900">{fmtXof(tx)}</div>
                 </div>
               </div>
 
@@ -383,15 +380,15 @@ export function ReceiveInvoicePage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-emerald-600">Remise</span>
                   <div className="text-right">
-                    {showForeign && df > 0 && <div className="text-xs text-emerald-500">− {fmtF(df)} {currency}</div>}
-                    <div className="font-medium text-emerald-600">− {fmt(dx)} XOF</div>
+                    {showForeign && df > 0 && <div className="text-xs text-emerald-500">− {fmtForeign(df, currency)}</div>}
+                    <div className="font-medium text-emerald-600">− {fmtXof(dx)}</div>
                   </div>
                 </div>
               )}
 
               <div className="flex justify-between text-sm font-semibold border-t border-gray-200 pt-2.5">
                 <span className="text-gray-800">Net dû</span>
-                <span className="text-gray-900">{fmt(netXof)} XOF</span>
+                <span className="text-gray-900">{fmtXof(netXof)}</span>
               </div>
 
               {ax > 0 && (
@@ -399,14 +396,14 @@ export function ReceiveInvoicePage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-blue-600">Avance versée</span>
                     <div className="text-right">
-                      {showForeign && af > 0 && <div className="text-xs text-blue-400">− {fmtF(af)} {currency}</div>}
-                      <div className="font-medium text-blue-600">− {fmt(ax)} XOF</div>
+                      {showForeign && af > 0 && <div className="text-xs text-blue-400">− {fmtForeign(af, currency)}</div>}
+                      <div className="font-medium text-blue-600">− {fmtXof(ax)}</div>
                     </div>
                   </div>
                   <div className="flex justify-between text-sm font-bold border-t-2 border-gray-300 pt-2.5">
                     <span className="text-gray-900">Solde restant</span>
                     <span className={balanceXof > 0 ? 'text-orange-600' : 'text-emerald-600'}>
-                      {fmt(balanceXof)} XOF
+                      {fmtXof(balanceXof)}
                     </span>
                   </div>
                 </>
