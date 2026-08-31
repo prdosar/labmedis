@@ -450,7 +450,28 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             ?? throw new DomainException("Client introuvable.");
 
         if (customer.ChartAccountId is null)
-            throw new DomainException($"Aucun compte comptable configuré pour le client '{customer.Name}'. Veuillez configurer un compte client dans le plan comptable.");
+        {
+            var accountCode = "4111" + customer.Code;
+            var existing = await DbContext.ChartAccounts
+                .FirstOrDefaultAsync(a => a.Code == accountCode, ct);
+            if (existing is null)
+            {
+                existing = new ChartAccount
+                {
+                    Code = accountCode,
+                    Name = $"Client – {customer.Name}",
+                    AccountClass = AccountClass.ThirdParty,
+                    NormalBalance = NormalBalance.Debit,
+                    IsThirdParty = true,
+                    IsSystem = false,
+                    ParentCode = "411"
+                };
+                DbContext.ChartAccounts.Add(existing);
+                await DbContext.SaveChangesAsync(ct);
+            }
+            customer.ChartAccountId = existing.Id;
+            await DbContext.SaveChangesAsync(ct);
+        }
 
         var clientAccount = await DbContext.ChartAccounts
             .FirstOrDefaultAsync(a => a.Id == customer.ChartAccountId, ct)
