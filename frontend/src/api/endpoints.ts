@@ -341,6 +341,20 @@ export const customerOrdersApi = {
   },
   getCustomerStats: (customerId: number) =>
     api.get<CustomerStatsDto>(`/customer-orders/customer-stats/${customerId}`),
+  // Documents
+  getDocuments: (id: number) =>
+    api.get<CustomerOrderDocumentDto[]>(`/customer-orders/${id}/documents`),
+  uploadDocument: (id: number, file: File, documentType: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('documentType', documentType)
+    return api.postForm<CustomerOrderDocumentDto>(`/customer-orders/${id}/documents`, form)
+  },
+  deleteDocument: (documentId: number) =>
+    api.delete<void>(`/customer-orders/documents/${documentId}`),
+  // Email
+  sendEmail: (id: number, type: 'proforma' | 'facture') =>
+    api.post<void>(`/customer-orders/${id}/send-email?type=${type}`),
 }
 
 // ─── SupplierOrders ──────────────────────────────────────────────────────────

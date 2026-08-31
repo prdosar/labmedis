@@ -15,4 +15,10 @@ public interface ICustomerOrderService
     Task<CustomerOrderPreviewDto> PreviewAsync(CustomerOrderPreviewRequestDto dto, CancellationToken ct = default);
     Task<int> GetAvailableStockAsync(long productId, long? excludeOrderId = null, CancellationToken ct = default);
     Task<CustomerStatsDto> GetCustomerStatsAsync(long customerId, CancellationToken ct = default);
+    // Documents
+    Task<IReadOnlyList<CustomerOrderDocumentDto>> GetDocumentsAsync(long orderId, CancellationToken ct = default);
+    Task<CustomerOrderDocumentDto> UploadDocumentAsync(long orderId, Stream content, string fileName, long fileSize, string documentType, CancellationToken ct = default);
+    Task DeleteDocumentAsync(long documentId, CancellationToken ct = default);
+    // Email
+    Task SendEmailAsync(long orderId, string emailType, CancellationToken ct = default);
 }

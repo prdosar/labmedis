@@ -11,7 +11,15 @@ namespace LabMedis.Infrastructure.Services;
 
 public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrderService
 {
-    public CustomerOrderService(AppDbContext dbContext) : base(dbContext) { }
+    private readonly IFileStorageService _fileStorage;
+    private readonly IEmailService _emailService;
+
+    public CustomerOrderService(AppDbContext dbContext, IFileStorageService fileStorage, IEmailService emailService)
+        : base(dbContext)
+    {
+        _fileStorage = fileStorage;
+        _emailService = emailService;
+    }
 
     // ── Queries ─────────────────────────────────────────────────────────────────
 
@@ -631,4 +639,110 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         l.UnitPriceHt, l.UnitCostPrice,
         l.LineTotalHt, l.LineTotalTva, l.LineTotalTtc, l.LineTotalCost,
         l.LineTotalHt - l.LineTotalCost);
+
+    // ── Documents ────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<CustomerOrderDocumentDto>> GetDocumentsAsync(long orderId, CancellationToken ct = default)
+    {
+        var docs = await DbContext.CustomerOrderDocuments
+            .Where(d => d.CustomerOrderId == orderId)
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync(ct);
+        return docs.Select(ToDocumentDto).ToList();
+    }
+
+    public async Task<CustomerOrderDocumentDto> UploadDocumentAsync(
+        long orderId, Stream content, string originalFileName, long fileSize, string documentType, CancellationToken ct = default)
+    {
+        var orderExists = await DbSet.AnyAsync(o => o.Id == orderId, ct);
+        if (!orderExists)
+            throw new DomainException($"Commande introuvable (Id={orderId}).");
+
+        var (relativePath, _) = await _fileStorage.SaveAsync(content, $"customer-orders/{orderId}", originalFileName, ct);
+
+        var doc = new CustomerOrderDocument
+        {
+            CustomerOrderId = orderId,
+            DocumentType = documentType,
+            FileName = originalFileName,
+            FilePath = relativePath,
+            FileSize = fileSize
+        };
+        DbContext.CustomerOrderDocuments.Add(doc);
+        await DbContext.SaveChangesAsync(ct);
+        return ToDocumentDto(doc);
+    }
+
+    public async Task DeleteDocumentAsync(long documentId, CancellationToken ct = default)
+    {
+        var doc = await DbContext.CustomerOrderDocuments
+            .FirstOrDefaultAsync(d => d.Id == documentId, ct)
+            ?? throw new DomainException($"Document introuvable (Id={documentId}).");
+
+        await _fileStorage.DeleteAsync(doc.FilePath, ct);
+        DbContext.CustomerOrderDocuments.Remove(doc);
+        await DbContext.SaveChangesAsync(ct);
+    }
+
+    private CustomerOrderDocumentDto ToDocumentDto(CustomerOrderDocument d) => new(
+        d.Id,
+        d.DocumentType,
+        d.FileName,
+        _fileStorage.GetPublicUrl(d.FilePath),
+        d.FileSize,
+        d.CreatedAt);
+
+    // ── Email ─────────────────────────────────────────────────────────────────────
+
+    public async Task SendEmailAsync(long orderId, string emailType, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.Customer)
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new DomainException($"Commande introuvable (Id={orderId}).");
+
+        var customer = order.Customer
+            ?? throw new DomainException("Client introuvable.");
+
+        if (string.IsNullOrWhiteSpace(customer.Email))
+            throw new DomainException($"Le client '{customer.Name}' n'a pas d'adresse email configurée.");
+
+        var isProforma = emailType == "proforma";
+        var subject = isProforma
+            ? $"Proforma — {order.Reference} — LabMedis"
+            : $"Facture — {order.Reference} — LabMedis";
+
+        var lines = order.Lines.Select(l =>
+            $"<tr><td style='padding:4px 8px'>{l.Product?.Designation ?? "—"}</td>" +
+            $"<td style='padding:4px 8px;text-align:right'>{l.Quantity}</td>" +
+            $"<td style='padding:4px 8px;text-align:right'>{l.UnitPriceHt:N0} XOF</td>" +
+            $"<td style='padding:4px 8px;text-align:right'>{l.LineTotalHt:N0} XOF</td></tr>");
+
+        var body = $@"
+<html><body style='font-family:Arial,sans-serif;font-size:12pt'>
+<h2>LabMedis SARL</h2>
+<p>Bonjour {customer.Name},</p>
+<p>Veuillez trouver ci-dessous votre {(isProforma ? "proforma" : "facture")} N° <strong>{order.Reference}</strong>.</p>
+<table border='1' cellspacing='0' cellpadding='0' style='border-collapse:collapse;width:100%'>
+<thead style='background:#f0f0f0'>
+<tr>
+  <th style='padding:6px 8px;text-align:left'>Désignation</th>
+  <th style='padding:6px 8px;text-align:right'>Qté</th>
+  <th style='padding:6px 8px;text-align:right'>Prix HT</th>
+  <th style='padding:6px 8px;text-align:right'>Total HT</th>
+</tr>
+</thead>
+<tbody>{string.Join("", lines)}</tbody>
+</table>
+<br/>
+<p><strong>Total HT :</strong> {order.TotalHt:N0} XOF</p>
+{(order.VatApplied ? $"<p><strong>TVA 18% :</strong> {order.TotalTva:N0} XOF</p>" : "")}
+<p><strong>Total TTC :</strong> {order.TotalTtc:N0} XOF</p>
+<br/>
+<p>Cordialement,<br/>LabMedis SARL — Lomé, Togo</p>
+</body></html>";
+
+        await _emailService.SendEmailAsync(customer.Email, subject, body);
+    }
 }

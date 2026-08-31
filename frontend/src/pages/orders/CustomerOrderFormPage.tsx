@@ -52,6 +52,10 @@ export function CustomerOrderFormPage() {
   useEffect(() => {
     if (!isEdit || !id) return
     customerOrdersApi.getById(Number(id)).then(order => {
+      if (order.status === 'Terminée' || order.status === 'Annulée') {
+        navigate(`/orders/customers/${id}`, { replace: true })
+        return
+      }
       setCustomerId(String(order.customerId))
       setOrderDate(order.orderDate.slice(0, 10))
       setVatApplied(order.vatApplied)

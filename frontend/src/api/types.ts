@@ -642,6 +642,15 @@ export interface SupplierInvoiceDto {
   createdAt: string
 }
 
+export interface CustomerOrderDocumentDto {
+  id: number
+  documentType: string
+  fileName: string
+  fileUrl: string
+  fileSize: number
+  uploadedAt: string
+}
+
 export interface SupplierOrderDto {
   id: number
   reference: string

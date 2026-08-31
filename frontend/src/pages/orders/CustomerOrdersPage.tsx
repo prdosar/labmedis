@@ -57,9 +57,15 @@ export function CustomerOrdersPage() {
     try {
       const { order, action } = confirmAction
       if (action === 'validate') await customerOrdersApi.validate(order.id)
-      else if (action === 'complete') await customerOrdersApi.complete(order.id)
+      else if (action === 'complete') {
+        await customerOrdersApi.complete(order.id)
+        toast('Commande clôturée.', 'success')
+        setConfirmAction(null)
+        navigate(`/orders/customers/${order.id}`)
+        return
+      }
       else await customerOrdersApi.cancel(order.id)
-      toast(action === 'cancel' ? 'Commande annulée.' : action === 'validate' ? 'Commande validée.' : 'Commande clôturée.', action === 'cancel' ? 'info' : 'success')
+      toast(action === 'cancel' ? 'Commande annulée.' : 'Commande validée.', action === 'cancel' ? 'info' : 'success')
       setConfirmAction(null)
       refresh()
     } catch (e) {
@@ -171,8 +177,12 @@ export function CustomerOrdersPage() {
         actions={row => (
           <div className="flex items-center gap-1">
             <button
-              title="Voir / Modifier"
-              onClick={() => navigate(`/orders/customers/${row.id}/edit`)}
+              title={row.status === 'Terminée' || row.status === 'Annulée' ? 'Voir le détail' : 'Voir / Modifier'}
+              onClick={() => navigate(
+                row.status === 'Terminée' || row.status === 'Annulée'
+                  ? `/orders/customers/${row.id}`
+                  : `/orders/customers/${row.id}/edit`
+              )}
               className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
             >
               <Eye size={14} />

@@ -43,6 +43,7 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<SupplierOrder> SupplierOrders => Set<SupplierOrder>();
     public DbSet<SupplierOrderLine> SupplierOrderLines => Set<SupplierOrderLine>();
     public DbSet<SupplierOrderDocument> SupplierOrderDocuments => Set<SupplierOrderDocument>();
+    public DbSet<CustomerOrderDocument> CustomerOrderDocuments => Set<CustomerOrderDocument>();
     public DbSet<SupplierProformaRejection> SupplierProformaRejections => Set<SupplierProformaRejection>();
     public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();

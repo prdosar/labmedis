@@ -40,6 +40,7 @@ import { ThirdPartyLedgerPage } from './pages/accounting/ThirdPartyLedgerPage'
 import { SupplierAccountPage } from './pages/accounting/SupplierAccountPage'
 import { CustomerOrdersPage } from './pages/orders/CustomerOrdersPage'
 import { CustomerOrderFormPage } from './pages/orders/CustomerOrderFormPage'
+import { CustomerOrderDetailPage } from './pages/orders/CustomerOrderDetailPage'
 import { SupplierOrdersPage } from './pages/orders/SupplierOrdersPage'
 import { SupplierOrderFormPage } from './pages/orders/SupplierOrderFormPage'
 import { ReceiveProformaPage } from './pages/orders/ReceiveProformaPage'
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="/customers/:id" element={<CustomerDetailPage />} />
               <Route path="/orders/customers" element={<CustomerOrdersPage />} />
               <Route path="/orders/customers/new" element={<CustomerOrderFormPage />} />
+              <Route path="/orders/customers/:id" element={<CustomerOrderDetailPage />} />
               <Route path="/orders/customers/:id/edit" element={<CustomerOrderFormPage />} />
               <Route path="/orders/suppliers" element={<SupplierOrdersPage />} />
               <Route path="/orders/suppliers/new" element={<SupplierOrderFormPage />} />

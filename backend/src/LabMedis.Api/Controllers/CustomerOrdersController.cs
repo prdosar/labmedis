@@ -66,4 +66,36 @@ public class CustomerOrdersController : ControllerBase
     [HttpGet("customer-stats/{customerId:long}")]
     public async Task<ActionResult<CustomerStatsDto>> GetCustomerStats(long customerId, CancellationToken ct)
         => Ok(await _service.GetCustomerStatsAsync(customerId, ct));
+
+    // ── Documents ────────────────────────────────────────────────────────────────
+
+    [HttpGet("{id:long}/documents")]
+    public async Task<ActionResult<IReadOnlyList<CustomerOrderDocumentDto>>> GetDocuments(long id, CancellationToken ct)
+        => Ok(await _service.GetDocumentsAsync(id, ct));
+
+    [HttpPost("{id:long}/documents")]
+    [RequestSizeLimit(26_214_400)]
+    public async Task<ActionResult<CustomerOrderDocumentDto>> UploadDocument(
+        long id, IFormFile file, [FromForm] string documentType = "BonCommande", CancellationToken ct = default)
+    {
+        await using var stream = file.OpenReadStream();
+        var doc = await _service.UploadDocumentAsync(id, stream, file.FileName, file.Length, documentType, ct);
+        return Ok(doc);
+    }
+
+    [HttpDelete("documents/{documentId:long}")]
+    public async Task<IActionResult> DeleteDocument(long documentId, CancellationToken ct)
+    {
+        await _service.DeleteDocumentAsync(documentId, ct);
+        return NoContent();
+    }
+
+    // ── Email ─────────────────────────────────────────────────────────────────────
+
+    [HttpPost("{id:long}/send-email")]
+    public async Task<IActionResult> SendEmail(long id, [FromQuery] string type = "proforma", CancellationToken ct = default)
+    {
+        await _service.SendEmailAsync(id, type, ct);
+        return NoContent();
+    }
 }
