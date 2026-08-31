@@ -38,3 +38,11 @@ desktop.ini
 
 # ── Claude Code ───────────────────────────────────────────────────────────────
 .claude/
+
+# ── Fichiers de travail locaux (ne pas versionner) ────────────────────────────
+*.xlsx
+*.xls
+~$*.xlsx
+~$*.xls
+*.pdf
+frontend/screenshot-*.png
