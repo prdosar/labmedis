@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2 } from 'lucide-react'
+import logo from '../../assets/logo.png'
 import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto } from '../../api/types'
 import { customerOrdersApi, invoicesApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
@@ -44,7 +45,7 @@ function PrintHeader({ title, reference, date }: { title: string; reference: str
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '2px solid #863bff', paddingBottom: '12px' }}>
       {/* Logo + company */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <img src="/favicon.svg" alt="LabMedis" style={{ width: '40px', height: '40px' }} />
+        <img src={logo} alt="LabMedis" style={{ height: '60px', objectFit: 'contain' }} />
         <div>
           <div style={{ fontWeight: 'bold', fontSize: '14pt', color: '#1a1a1a' }}>LABMEDIS SARL</div>
           <div style={{ fontSize: '8pt', color: '#666' }}>QAT. GBOSSIME, 380 RUE BD DE LA KARA</div>
