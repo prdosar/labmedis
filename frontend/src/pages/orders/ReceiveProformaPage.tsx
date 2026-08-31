@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Upload, Trash2, FileText, Printer, CheckCircle, X } from 'lucide-react'
-import type { SupplierOrderDto, SupplierOrderDocumentDto } from '../../api/types'
-import { supplierOrdersApi } from '../../api/endpoints'
+import type { CountryDto, SupplierOrderDto, SupplierOrderDocumentDto } from '../../api/types'
+import { countriesApi, supplierOrdersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
@@ -54,6 +54,9 @@ export function ReceiveProformaPage() {
   // Line prices
   const [lines, setLines] = useState<LineInput[]>([])
 
+  // Countries for origin dropdown
+  const [countries, setCountries] = useState<CountryDto[]>([])
+
   // Documents
   const [documents, setDocuments] = useState<SupplierOrderDocumentDto[]>([])
   const [uploadingDocType, setUploadingDocType] = useState('Proforma')
@@ -66,15 +69,20 @@ export function ReceiveProformaPage() {
   useEffect(() => {
     if (!id) return
     setLoading(true)
-    supplierOrdersApi.getById(Number(id))
-      .then(o => {
+    Promise.all([
+      supplierOrdersApi.getById(Number(id)),
+      countriesApi.getForSelect(),
+    ])
+      .then(([o, ctrs]) => {
+        setCountries(ctrs)
         setOrder(o)
         setProformaRef(o.proformaReference ?? '')
         setContainerRef(o.containerReference ?? '')
         setFreightAmount(o.freightAmount != null ? String(o.freightAmount) : '')
         setPaymentTerms(o.paymentTerms ?? '')
         setBrand(o.brand ?? '')
-        setOrigin(o.origin ?? '')
+        // Default origin to supplier's country if not already set on the order
+        setOrigin(o.origin ?? o.supplierCountryName ?? '')
         setExpectedShippingDate(o.expectedShippingDate ?? '')
         setLines(o.lines.map(l => ({
           lineId: l.id,
@@ -302,12 +310,16 @@ export function ReceiveProformaPage() {
                   />
                 </Field>
                 <Field label="Origine">
-                  <input
+                  <select
                     value={origin}
                     onChange={e => setOrigin(e.target.value)}
-                    placeholder="ex : Union européenne"
                     className={inputCls}
-                  />
+                  >
+                    <option value="">— Sélectionner un pays —</option>
+                    {countries.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Date d'embarquement prévue">
                   <input
@@ -405,6 +417,12 @@ export function ReceiveProformaPage() {
                     <span className="text-xs font-semibold text-gray-500 w-10">{currency}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Grand total */}
+              <div className="px-5 py-3 border-t-2 border-gray-300 bg-gray-100 flex items-center justify-between">
+                <span className="text-sm font-bold text-gray-800">Total général (produits + fret)</span>
+                <span className="text-sm font-bold text-gray-900">{fmt(grandTotal)} {currency}</span>
               </div>
             </div>
 

@@ -6,6 +6,8 @@ public record SupplierOrderDto(
     DateTime OrderDate,
     long SupplierId,
     string SupplierName,
+    long? SupplierCountryId,
+    string? SupplierCountryName,
     string Status,
     string Currency,
     string? Notes,

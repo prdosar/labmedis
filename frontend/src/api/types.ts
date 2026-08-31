@@ -648,6 +648,8 @@ export interface SupplierOrderDto {
   orderDate: string
   supplierId: number
   supplierName: string
+  supplierCountryId: number | null
+  supplierCountryName: string | null
   status: string
   currency: string
   notes: string | null

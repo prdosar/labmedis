@@ -51,6 +51,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     {
         var order = await DbSet
             .Include(o => o.Supplier)
+                .ThenInclude(s => s!.Country)
             .Include(o => o.Lines)
                 .ThenInclude(l => l.Product)
                     .ThenInclude(p => p!.Packaging)
@@ -947,6 +948,8 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         o.OrderDate,
         o.SupplierId,
         o.Supplier?.Name ?? "",
+        o.Supplier?.CountryId,
+        o.Supplier?.Country?.Name,
         o.Status.ToString(),
         o.Currency,
         o.Notes,
