@@ -30,6 +30,7 @@ type ChargeKey = typeof CHARGE_DEFS[number]['key']
 
 interface GoodsLineState {
   orderLineId: number
+  productCode: string
   productDesignation: string
   packagingName: string | null
   dosageName: string | null
@@ -133,6 +134,7 @@ export function ReceiveGoodsPage() {
         setLines(
           o.lines.map(l => ({
             orderLineId: l.id,
+            productCode: l.productCode,
             productDesignation: l.productDesignation,
             packagingName: l.packagingName,
             dosageName: l.dosageName,
@@ -348,9 +350,14 @@ export function ReceiveGoodsPage() {
                     className={`px-4 py-2.5 grid gap-1.5 items-center ${hasLoss ? 'bg-red-50/30' : ''}`}
                     style={{ gridTemplateColumns: RECV_GRID }}
                   >
-                    <div>
-                      <div className="text-sm text-gray-900 truncate">{label}</div>
-                      {line.dosageName && <div className="text-xs text-gray-400">{line.dosageName}</div>}
+                    <div className="min-w-0">
+                      <div
+                        className="text-sm text-gray-900 truncate"
+                        title={label}
+                      >
+                        {label}
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
                     </div>
                     <div className="text-sm text-gray-500 text-right">{line.orderedQuantity}</div>
                     <input
@@ -491,7 +498,10 @@ export function ReceiveGoodsPage() {
                           className={`px-4 py-2.5 grid gap-1.5 items-center ${isLoss ? 'bg-red-50/40' : ''}`}
                           style={{ gridTemplateColumns: PRICE_GRID }}
                         >
-                          <div className="text-sm text-gray-900 truncate">{label}</div>
+                          <div className="min-w-0">
+                            <div className="text-sm text-gray-900 truncate" title={label}>{label}</div>
+                            <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
+                          </div>
 
                           <div className="text-right text-xs font-mono text-gray-600">
                             {p.paUnit > 0 ? fmtNum(p.paUnit, 0) : <span className="text-gray-300">—</span>}
