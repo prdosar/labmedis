@@ -33,8 +33,6 @@ services:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=labmedis_dev_password"
       UploadPath: /app/uploads
       UploadBaseUrl: /uploads
-    ports:
-      - "8081:8080"
     volumes:
       - uploads_data:/app/uploads
     networks:
