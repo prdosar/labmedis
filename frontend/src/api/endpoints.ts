@@ -5,6 +5,7 @@ import type {
   ChartAccountDto,
   CountryDto,
   CustomerDto,
+  CustomerOrderDocumentDto,
   CustomerOrderDto,
   CustomerOrderPreviewDto,
   CustomerOrderSummaryDto,
