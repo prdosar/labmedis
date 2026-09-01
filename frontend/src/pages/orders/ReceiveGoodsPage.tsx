@@ -324,7 +324,7 @@ export function ReceiveGoodsPage() {
             </div>
 
             <div className="overflow-x-auto">
-            <div style={{ minWidth: '860px' }}>
+            <div style={{ minWidth: '1100px' }}>
             <div
               className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
               style={{ gridTemplateColumns: RECV_GRID }}
@@ -476,7 +476,7 @@ export function ReceiveGoodsPage() {
 
                 {/* Per-line pricing */}
                 <div className="overflow-x-auto">
-                <div style={{ minWidth: '680px' }}>
+                <div style={{ minWidth: '820px' }}>
                 <div
                   className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
                   style={{ gridTemplateColumns: PRICE_GRID }}
