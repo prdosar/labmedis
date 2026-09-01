@@ -326,10 +326,10 @@ export function ReceiveGoodsPage() {
             <div className="overflow-x-auto">
             <div style={{ minWidth: '860px' }}>
             <div
-              className="px-4 py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
+              className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
               style={{ gridTemplateColumns: RECV_GRID }}
             >
-              <span>Produit</span>
+              <span className="sticky left-0 bg-gray-50 z-10 pl-4 pr-2">Produit</span>
               <span className="text-right">Cmd</span>
               <span className="text-right">Cartons</span>
               <span className="text-right text-red-500">Perdus</span>
@@ -349,10 +349,10 @@ export function ReceiveGoodsPage() {
                 return (
                   <div
                     key={line.orderLineId}
-                    className={`px-4 py-2.5 grid gap-1.5 items-center ${hasLoss ? 'bg-red-50/30' : ''}`}
+                    className={`py-2.5 grid gap-1.5 items-center ${hasLoss ? 'bg-red-50/30' : ''}`}
                     style={{ gridTemplateColumns: RECV_GRID }}
                   >
-                    <div className="min-w-0">
+                    <div className={`min-w-0 sticky left-0 z-10 pl-4 pr-2 ${hasLoss ? 'bg-red-50' : 'bg-white'}`}>
                       <div
                         className="text-sm text-gray-900 truncate"
                         title={label}
@@ -478,10 +478,10 @@ export function ReceiveGoodsPage() {
                 <div className="overflow-x-auto">
                 <div style={{ minWidth: '680px' }}>
                 <div
-                  className="px-4 py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
+                  className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
                   style={{ gridTemplateColumns: PRICE_GRID }}
                 >
-                  <span>Produit</span>
+                  <span className="sticky left-0 bg-gray-50 z-10 pl-4 pr-2">Produit</span>
                   <span className="text-right">PA/u (XOF)</span>
                   <span className="text-right">PR calculé</span>
                   <span className="text-right">Marge %</span>
@@ -501,10 +501,10 @@ export function ReceiveGoodsPage() {
                     return (
                       <div key={line.orderLineId}>
                         <div
-                          className={`px-4 py-2.5 grid gap-1.5 items-center ${isLoss ? 'bg-red-50/40' : ''}`}
+                          className={`py-2.5 grid gap-1.5 items-center ${isLoss ? 'bg-red-50/40' : ''}`}
                           style={{ gridTemplateColumns: PRICE_GRID }}
                         >
-                          <div className="min-w-0">
+                          <div className={`min-w-0 sticky left-0 z-10 pl-4 pr-2 ${isLoss ? 'bg-red-50' : 'bg-white'}`}>
                             <div className="text-sm text-gray-900 truncate" title={label}>{label}</div>
                             <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
                           </div>
