@@ -323,6 +323,8 @@ export function ReceiveGoodsPage() {
               <p className="text-xs text-gray-400 mt-0.5">Cartons reçus, perdus, unités/carton, prix FOB et N° lot</p>
             </div>
 
+            <div className="overflow-x-auto">
+            <div style={{ minWidth: '860px' }}>
             <div
               className="px-4 py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
               style={{ gridTemplateColumns: RECV_GRID }}
@@ -401,6 +403,8 @@ export function ReceiveGoodsPage() {
                 )
               })}
             </div>
+            </div>{/* minWidth */}
+            </div>{/* overflow-x-auto */}
           </div>
 
           {/* Pricing structure */}
@@ -471,6 +475,8 @@ export function ReceiveGoodsPage() {
                 </div>
 
                 {/* Per-line pricing */}
+                <div className="overflow-x-auto">
+                <div style={{ minWidth: '680px' }}>
                 <div
                   className="px-4 py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
                   style={{ gridTemplateColumns: PRICE_GRID }}
@@ -548,6 +554,9 @@ export function ReceiveGoodsPage() {
                     )
                   })}
                 </div>
+
+                </div>{/* minWidth */}
+                </div>{/* overflow-x-auto */}
 
                 <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/60">
                   <p className="text-xs text-gray-400">
