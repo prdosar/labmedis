@@ -7,7 +7,9 @@ import type {
   CustomerDto,
   CustomerOrderDocumentDto,
   CustomerOrderDto,
+
   CustomerOrderPreviewDto,
+  CustomerOrderSuggestedLotDto,
   CustomerOrderSummaryDto,
   CustomerStatsDto,
   CustomsRegimeDto,
@@ -29,6 +31,9 @@ import type {
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
+  CustomerCreditNoteDto,
+  CustomerCreditNoteLineDto,
+  SupplierCreditNoteDto,
   SupplierInvoiceDto,
   SupplierOrderDocumentDto,
   SupplierOrderDto,
@@ -40,6 +45,7 @@ import type {
   TrialBalanceLineDto,
   UserDto,
   WarehouseDto,
+  ProductStockInfoDto,
 } from './types'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -327,18 +333,22 @@ export const customerOrdersApi = {
     return api.get<PagedResult<CustomerOrderSummaryDto>>(`/customer-orders?${qs}`)
   },
   getById: (id: number) => api.get<CustomerOrderDto>(`/customer-orders/${id}`),
-  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number }[] }) =>
+  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[] }) =>
     api.post<CustomerOrderDto>('/customer-orders', dto),
-  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number }[] }) =>
+  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[] }) =>
     api.put<CustomerOrderDto>(`/customer-orders/${id}`, dto),
   validate: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/validate`),
+  getSuggestedLots: (id: number) =>
+    api.get<CustomerOrderSuggestedLotDto[]>(`/customer-orders/${id}/suggested-lots`),
+  prepare: (id: number, lots: { orderLineId: number; purchaseLineId: number; quantityAllocated: number }[]) =>
+    api.post<CustomerOrderDto>(`/customer-orders/${id}/prepare`, { lots }),
   complete: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/complete`),
   cancel: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/cancel`),
   preview: (dto: { vatApplied: boolean; lines: { productId: number; quantity: number }[] }) =>
     api.post<CustomerOrderPreviewDto>('/customer-orders/preview', dto),
   getStock: (productId: number, excludeOrderId?: number) => {
     const qs = excludeOrderId ? `?excludeOrderId=${excludeOrderId}` : ''
-    return api.get<number>(`/customer-orders/stock/${productId}${qs}`)
+    return api.get<ProductStockInfoDto>(`/customer-orders/stock/${productId}${qs}`)
   },
   getCustomerStats: (customerId: number) =>
     api.get<CustomerStatsDto>(`/customer-orders/customer-stats/${customerId}`),
@@ -483,6 +493,53 @@ export const supplierOrdersApi = {
   deleteDocument: (documentId: number) => api.delete<void>(`/supplier-orders/documents/${documentId}`),
   sendEmail: (id: number, recipientEmail?: string | null) =>
     api.post<{ message: string }>(`/supplier-orders/${id}/send-email`, { recipientEmail: recipientEmail ?? null }),
+  getAllCreditNotes: (params: { page?: number; size?: number; status?: string; supplierId?: number }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 500) })
+    if (params.status) qs.set('status', params.status)
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    return api.get<PagedResult<SupplierCreditNoteDto>>(`/supplier-orders/credit-notes?${qs}`)
+  },
+  getCreditNotesByOrder: (orderId: number) =>
+    api.get<SupplierCreditNoteDto[]>(`/supplier-orders/${orderId}/credit-notes`),
+  updateCreditNoteStatus: (creditNoteId: number, status: string, notes?: string) =>
+    api.patch<SupplierCreditNoteDto>(`/supplier-orders/credit-notes/${creditNoteId}/status`, { status, notes }),
+}
+
+// ─── Avoirs clients ───────────────────────────────────────────────────────────
+
+export type { CustomerCreditNoteLineDto }
+
+export interface CreateCreditNoteLineInput {
+  productId: number
+  warehouseId: number
+  purchaseLineId: number | null
+  quantityReturned: number
+  unitPriceHt: number
+  discountPercent: number
+  tvaRate: number
+  lotNumber: string | null
+}
+
+export const customerCreditNotesApi = {
+  getAll: (params: { page?: number; size?: number; status?: string; customerId?: number }) => {
+    const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 500) })
+    if (params.status) qs.set('status', params.status)
+    if (params.customerId) qs.set('customerId', String(params.customerId))
+    return api.get<PagedResult<CustomerCreditNoteDto>>(`/customer-credit-notes?${qs}`)
+  },
+  getById: (id: number) => api.get<CustomerCreditNoteDto>(`/customer-credit-notes/${id}`),
+  getByInvoice: (invoiceId: number) => api.get<CustomerCreditNoteDto[]>(`/customer-credit-notes/by-invoice/${invoiceId}`),
+  create: (dto: {
+    customerId: number
+    invoiceId: number | null
+    creditNoteDate: string
+    notes: string | null
+    lines: CreateCreditNoteLineInput[]
+  }) => api.post<CustomerCreditNoteDto>('/customer-credit-notes', dto),
+  updateStatus: (id: number, status: string, notes?: string) =>
+    api.patch<CustomerCreditNoteDto>(`/customer-credit-notes/${id}/status`, { status, notes }),
+  applyToInvoice: (id: number) =>
+    api.post<CustomerCreditNoteDto>(`/customer-credit-notes/${id}/apply-to-invoice`, {}),
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────

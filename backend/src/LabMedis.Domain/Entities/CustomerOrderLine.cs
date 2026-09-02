@@ -11,6 +11,8 @@ public class CustomerOrderLine : BaseEntity
     public Product? Product { get; set; }
 
     public int Quantity { get; set; }
+    public int QuantityRequested { get; set; }
+    public int UnitsPerCarton { get; set; } = 1;
     public decimal UnitPriceHt { get; set; }
     public decimal UnitCostPrice { get; set; }
 

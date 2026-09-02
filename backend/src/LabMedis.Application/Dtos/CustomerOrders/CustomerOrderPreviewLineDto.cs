@@ -5,6 +5,7 @@ public record CustomerOrderPreviewLineDto(
     string ProductCode,
     string ProductDesignation,
     int Quantity,
+    int UnitsPerCarton,
     int AvailableStock,
     decimal UnitPriceHt,
     decimal UnitCostPrice,

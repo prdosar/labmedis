@@ -105,12 +105,45 @@ export interface CustomerDto {
 
 // ─── CustomerOrder ───────────────────────────────────────────────────────────
 
+export interface CustomerOrderLotLineDto {
+  id: number
+  customerOrderLineId: number
+  productId: number
+  productCode: string
+  productDesignation: string
+  purchaseLineId: number
+  lotNumber: string
+  expirationDate: string | null   // DateOnly serialized as "YYYY-MM-DD"
+  quantityAllocated: number
+  warehouseId: number
+  warehouseName: string | null
+}
+
+export interface SuggestedLotItemDto {
+  purchaseLineId: number
+  lotNumber: string
+  expirationDate: string | null
+  availableStock: number
+  suggestedQuantity: number
+}
+
+export interface CustomerOrderSuggestedLotDto {
+  orderLineId: number
+  productId: number
+  productCode: string
+  productDesignation: string
+  lineQuantity: number
+  lots: SuggestedLotItemDto[]
+}
+
 export interface CustomerOrderLineDto {
   id: number
   productId: number
   productCode: string
   productDesignation: string
   quantity: number
+  quantityRequested: number
+  unitsPerCarton: number
   availableStock: number
   unitPriceHt: number
   unitCostPrice: number
@@ -140,6 +173,7 @@ export interface CustomerOrderDto {
   invoiceId: number | null
   invoiceReference: string | null
   lines: CustomerOrderLineDto[]
+  lotLines: CustomerOrderLotLineDto[]
   createdAt: string
   updatedAt: string | null
 }
@@ -170,6 +204,7 @@ export interface CustomerOrderPreviewLineDto {
   productCode: string
   productDesignation: string
   quantity: number
+  unitsPerCarton: number
   availableStock: number
   unitPriceHt: number
   unitCostPrice: number
@@ -178,6 +213,11 @@ export interface CustomerOrderPreviewLineDto {
   lineTotalTtc: number
   lineTotalCost: number
   lineProfit: number
+}
+
+export interface ProductStockInfoDto {
+  availableStock: number
+  unitsPerCarton: number
 }
 
 export interface CustomerOrderPreviewDto {
@@ -696,6 +736,70 @@ export interface SupplierOrderSummaryDto {
   invoiceBalanceDue: number | null
   createdAt: string
   updatedAt: string | null
+}
+
+// ─── Avoir fournisseur ────────────────────────────────────────────────────────
+
+export interface SupplierCreditNoteDto {
+  id: number
+  reference: string
+  supplierOrderId: number
+  orderReference: string
+  supplierInvoiceId: number | null
+  invoiceReference: string | null
+  purchaseId: number
+  purchaseReference: string
+  supplierId: number
+  supplierName: string
+  creditNoteDate: string
+  amountForeign: number
+  currency: string
+  exchangeRateToXof: number
+  amountXof: number
+  lostBoxesCount: number
+  status: string
+  notes: string | null
+  resolvedAt: string | null
+  createdAt: string
+}
+
+// ─── Avoir client ────────────────────────────────────────────────────────────
+
+export interface CustomerCreditNoteLineDto {
+  id: number
+  productId: number
+  productCode: string | null
+  productDesignation: string | null
+  warehouseId: number
+  warehouseName: string | null
+  purchaseLineId: number | null
+  lotNumber: string | null
+  quantityReturned: number
+  unitPriceHt: number
+  discountPercent: number
+  tvaRate: number
+  lineTotalHt: number
+  lineTva: number
+  lineTotalTtc: number
+  stockMovementId: number | null
+}
+
+export interface CustomerCreditNoteDto {
+  id: number
+  reference: string
+  customerId: number
+  customerName: string
+  invoiceId: number | null
+  invoiceReference: string | null
+  creditNoteDate: string
+  totalAmountHt: number
+  totalTva: number
+  totalAmountTtc: number
+  status: string
+  notes: string | null
+  resolvedAt: string | null
+  createdAt: string
+  lines: CustomerCreditNoteLineDto[]
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

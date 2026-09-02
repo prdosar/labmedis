@@ -55,6 +55,9 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             .Include(o => o.Customer)
             .Include(o => o.Invoice)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .Include(o => o.LotLines).ThenInclude(ll => ll.Product)
+            .Include(o => o.LotLines).ThenInclude(ll => ll.PurchaseLine)
+            .Include(o => o.LotLines).ThenInclude(ll => ll.Warehouse)
             .FirstOrDefaultAsync(o => o.Id == id, ct);
 
         if (order is null) return null;
@@ -127,8 +130,8 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
 
         if (order is null) return null;
 
-        if (order.Status == CustomerOrderStatus.Terminée || order.Status == CustomerOrderStatus.Annulée)
-            throw new DomainException("Une commande terminée ou annulée ne peut pas être modifiée.");
+        if (order.Status == CustomerOrderStatus.Terminée || order.Status == CustomerOrderStatus.Annulée || order.Status == CustomerOrderStatus.EnPréparation)
+            throw new DomainException("Une commande terminée, annulée ou en préparation ne peut pas être modifiée.");
 
         if (dto.Lines.Count == 0)
             throw new DomainException("Une commande doit contenir au moins une ligne.");
@@ -214,19 +217,15 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
 
-    public async Task<CustomerOrderDto> CompleteAsync(long id, CancellationToken ct = default)
+    public async Task<IReadOnlyList<CustomerOrderSuggestedLotDto>> GetSuggestedLotsAsync(long orderId, CancellationToken ct = default)
     {
         var order = await DbSet
-            .Include(o => o.Customer).ThenInclude(c => c!.ChartAccount)
-            .Include(o => o.Invoice).ThenInclude(i => i!.Lines)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
-            .FirstOrDefaultAsync(o => o.Id == id, ct)
-            ?? throw new DomainException($"Commande introuvable (Id={id}).");
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new DomainException($"Commande introuvable (Id={orderId}).");
 
-        if (order.Status != CustomerOrderStatus.Validée)
-            throw new DomainException("Seule une commande validée peut être clôturée.");
+        var result = new List<CustomerOrderSuggestedLotDto>();
 
-        // 1. Consume stock FIFO per line + create StockMovements
         foreach (var line in order.Lines)
         {
             var lots = await DbContext.PurchaseLines
@@ -236,30 +235,173 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
                 .ThenBy(pl => pl.Id)
                 .ToListAsync(ct);
 
+            var suggestedItems = new List<SuggestedLotItemDto>();
             int remaining = line.Quantity;
+            var usedIds = new HashSet<long>();
+
             foreach (var lot in lots)
             {
                 if (remaining <= 0) break;
-                int consume = Math.Min(remaining, lot.QuantityRemaining);
-                lot.ConsumeStock(consume);
+                int take = Math.Min(remaining, lot.QuantityRemaining);
+                suggestedItems.Add(new SuggestedLotItemDto(
+                    lot.Id, lot.LotNumber,
+                    lot.ExpirationDate.HasValue ? DateOnly.FromDateTime(lot.ExpirationDate.Value) : null,
+                    lot.QuantityRemaining, take));
+                usedIds.Add(lot.Id);
+                remaining -= take;
+            }
 
+            foreach (var lot in lots.Where(l => !usedIds.Contains(l.Id)))
+            {
+                suggestedItems.Add(new SuggestedLotItemDto(
+                    lot.Id, lot.LotNumber,
+                    lot.ExpirationDate.HasValue ? DateOnly.FromDateTime(lot.ExpirationDate.Value) : null,
+                    lot.QuantityRemaining, 0));
+            }
+
+            result.Add(new CustomerOrderSuggestedLotDto(
+                line.Id, line.ProductId,
+                line.Product?.Code ?? "", line.Product?.Designation ?? "",
+                line.Quantity, suggestedItems));
+        }
+
+        return result;
+    }
+
+    public async Task<CustomerOrderDto> PrepareAsync(long orderId, PrepareOrderDto dto, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == orderId, ct)
+            ?? throw new DomainException($"Commande introuvable (Id={orderId}).");
+
+        if (order.Status != CustomerOrderStatus.Validée)
+            throw new DomainException("Seule une commande validée peut passer en préparation.");
+
+        foreach (var orderLine in order.Lines)
+        {
+            var allocated = dto.Lots
+                .Where(l => l.OrderLineId == orderLine.Id)
+                .Sum(l => l.QuantityAllocated);
+            if (allocated != orderLine.Quantity)
+                throw new DomainException(
+                    $"Quantité allouée ({allocated}) ≠ quantité commandée ({orderLine.Quantity}) pour le produit Id={orderLine.ProductId}.");
+        }
+
+        foreach (var group in dto.Lots.Where(l => l.QuantityAllocated > 0).GroupBy(l => l.PurchaseLineId))
+        {
+            var totalAllocated = group.Sum(l => l.QuantityAllocated);
+            var pl = await DbContext.PurchaseLines
+                .FirstOrDefaultAsync(p => p.Id == group.Key && !p.IsDeleted, ct)
+                ?? throw new DomainException($"Lot introuvable (Id={group.Key}).");
+            if (totalAllocated > pl.QuantityRemaining)
+                throw new DomainException(
+                    $"Stock insuffisant pour le lot '{pl.LotNumber}' : {pl.QuantityRemaining} disponible(s), {totalAllocated} alloué(s).");
+        }
+
+        var existing = await DbContext.CustomerOrderLotLines
+            .Where(l => l.CustomerOrderId == orderId)
+            .ToListAsync(ct);
+        DbContext.CustomerOrderLotLines.RemoveRange(existing);
+
+        foreach (var lot in dto.Lots.Where(l => l.QuantityAllocated > 0))
+        {
+            var orderLine = order.Lines.First(l => l.Id == lot.OrderLineId);
+            var product = await DbContext.Products
+                .FirstOrDefaultAsync(p => p.Id == orderLine.ProductId, ct)
+                ?? throw new DomainException($"Produit introuvable (Id={orderLine.ProductId}).");
+
+            DbContext.CustomerOrderLotLines.Add(new CustomerOrderLotLine
+            {
+                CustomerOrderId = orderId,
+                CustomerOrderLineId = lot.OrderLineId,
+                ProductId = orderLine.ProductId,
+                PurchaseLineId = lot.PurchaseLineId,
+                WarehouseId = product.WarehouseId,
+                QuantityAllocated = lot.QuantityAllocated,
+            });
+        }
+
+        order.StartPreparation();
+        await DbContext.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(orderId, ct) ?? throw new InvalidOperationException();
+    }
+
+    public async Task<CustomerOrderDto> CompleteAsync(long id, CancellationToken ct = default)
+    {
+        var order = await DbSet
+            .Include(o => o.Customer).ThenInclude(c => c!.ChartAccount)
+            .Include(o => o.Invoice).ThenInclude(i => i!.Lines)
+            .Include(o => o.Lines).ThenInclude(l => l.Product)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
+            ?? throw new DomainException($"Commande introuvable (Id={id}).");
+
+        if (order.Status != CustomerOrderStatus.Validée && order.Status != CustomerOrderStatus.EnPréparation)
+            throw new DomainException("Seule une commande validée ou en préparation peut être clôturée.");
+
+        // 1. Consume stock + create StockMovements
+        if (order.Status == CustomerOrderStatus.EnPréparation)
+        {
+            var lotLines = await DbContext.CustomerOrderLotLines
+                .Include(l => l.PurchaseLine)
+                .Where(l => l.CustomerOrderId == id && !l.IsDeleted)
+                .ToListAsync(ct);
+
+            if (!lotLines.Any())
+                throw new DomainException("Aucune ligne de préparation trouvée. Relancez la préparation.");
+
+            foreach (var lotLine in lotLines)
+            {
+                lotLine.PurchaseLine!.ConsumeStock(lotLine.QuantityAllocated);
                 DbContext.StockMovements.Add(new StockMovement
                 {
-                    ProductId = line.ProductId,
-                    WarehouseId = line.Product!.WarehouseId,
-                    PurchaseLineId = lot.Id,
+                    ProductId = lotLine.ProductId,
+                    WarehouseId = lotLine.WarehouseId,
+                    PurchaseLineId = lotLine.PurchaseLineId,
                     MovementType = StockMovementType.SaleExit,
-                    Quantity = -consume,
+                    Quantity = -lotLine.QuantityAllocated,
                     MovementDate = DateTime.UtcNow,
                     Reference = order.Reference,
                     Notes = $"Vente – {order.Customer?.Name}"
                 });
-                remaining -= consume;
             }
+        }
+        else
+        {
+            foreach (var line in order.Lines)
+            {
+                var lots = await DbContext.PurchaseLines
+                    .Where(pl => pl.ProductId == line.ProductId && !pl.IsDeleted && pl.QuantityRemaining > 0)
+                    .OrderBy(pl => pl.ExpirationDate == null ? 1 : 0)
+                    .ThenBy(pl => pl.ExpirationDate)
+                    .ThenBy(pl => pl.Id)
+                    .ToListAsync(ct);
 
-            if (remaining > 0)
-                throw new DomainException(
-                    $"Stock insuffisant pour '{line.Product?.Designation}' lors de la clôture.");
+                int remaining = line.Quantity;
+                foreach (var lot in lots)
+                {
+                    if (remaining <= 0) break;
+                    int consume = Math.Min(remaining, lot.QuantityRemaining);
+                    lot.ConsumeStock(consume);
+                    DbContext.StockMovements.Add(new StockMovement
+                    {
+                        ProductId = line.ProductId,
+                        WarehouseId = line.Product!.WarehouseId,
+                        PurchaseLineId = lot.Id,
+                        MovementType = StockMovementType.SaleExit,
+                        Quantity = -consume,
+                        MovementDate = DateTime.UtcNow,
+                        Reference = order.Reference,
+                        Notes = $"Vente – {order.Customer?.Name}"
+                    });
+                    remaining -= consume;
+                }
+
+                if (remaining > 0)
+                    throw new DomainException(
+                        $"Stock insuffisant pour '{line.Product?.Designation}' lors de la clôture.");
+            }
         }
 
         // 2. Issue Invoice
@@ -298,6 +440,7 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         {
             if (input.Quantity <= 0) continue;
             var product = await DbContext.Products
+                .Include(p => p.Packaging)
                 .FirstOrDefaultAsync(p => p.Id == input.ProductId, ct)
                 ?? throw new DomainException($"Produit introuvable (Id={input.ProductId}).");
 
@@ -306,10 +449,12 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             var lineHt = input.Quantity * unitPrice;
             var lineTva = dto.VatApplied ? Math.Round(lineHt * 0.18m, 2) : 0m;
             var lineCost = input.Quantity * unitCost;
+            var unitsPerCarton = product.Packaging?.UnitsPerPackaging ?? 1;
+            if (unitsPerCarton < 1) unitsPerCarton = 1;
 
             lines.Add(new CustomerOrderPreviewLineDto(
                 product.Id, product.Code, product.Designation,
-                input.Quantity, available,
+                input.Quantity, unitsPerCarton, available,
                 unitPrice, unitCost,
                 lineHt, lineTva, lineHt + lineTva,
                 lineCost,
@@ -324,6 +469,16 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
 
     public async Task<int> GetAvailableStockAsync(long productId, long? excludeOrderId = null, CancellationToken ct = default)
         => await GetAvailableStockCoreAsync(productId, excludeOrderId, ct);
+
+    public async Task<ProductStockInfoDto> GetStockInfoAsync(long productId, long? excludeOrderId = null, CancellationToken ct = default)
+    {
+        var available = await GetAvailableStockCoreAsync(productId, excludeOrderId, ct);
+        var unitsPerCarton = await DbContext.Products
+            .Where(p => p.Id == productId)
+            .Select(p => p.Packaging != null ? p.Packaging.UnitsPerPackaging : 1)
+            .FirstOrDefaultAsync(ct);
+        return new ProductStockInfoDto(available, unitsPerCarton < 1 ? 1 : unitsPerCarton);
+    }
 
     public async Task<CustomerStatsDto> GetCustomerStatsAsync(long customerId, CancellationToken ct = default)
     {
@@ -425,22 +580,27 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             if (input.Quantity <= 0)
                 throw new DomainException($"La quantité doit être positive (produit Id={input.ProductId}).");
 
-            var productExists = await DbContext.Products
-                .AnyAsync(p => p.Id == input.ProductId, ct);
-            if (!productExists)
-                throw new DomainException($"Produit introuvable (Id={input.ProductId}).");
+            var product = await DbContext.Products
+                .Include(p => p.Packaging)
+                .FirstOrDefaultAsync(p => p.Id == input.ProductId, ct)
+                ?? throw new DomainException($"Produit introuvable (Id={input.ProductId}).");
 
             var available = await GetAvailableStockCoreAsync(input.ProductId, excludeOrderId, ct);
             if (input.Quantity > available)
                 throw new DomainException(
-                    $"Quantité demandée ({input.Quantity}) dépasse le stock disponible ({available}) pour le produit Id={input.ProductId}.");
+                    $"Quantité livrée ({input.Quantity}) dépasse le stock disponible ({available}) pour le produit Id={input.ProductId}.");
 
             var (unitPrice, unitCost) = await GetFifoPricingAsync(input.ProductId, input.Quantity, ct);
+
+            var unitsPerCarton = product.Packaging?.UnitsPerPackaging ?? 1;
+            if (unitsPerCarton < 1) unitsPerCarton = 1;
 
             var line = new CustomerOrderLine
             {
                 ProductId = input.ProductId,
                 Quantity = input.Quantity,
+                QuantityRequested = input.QuantityRequested ?? input.Quantity,
+                UnitsPerCarton = input.UnitsPerCarton ?? unitsPerCarton,
                 UnitPriceHt = unitPrice,
                 UnitCostPrice = unitCost
             };
@@ -630,12 +790,23 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         o.Status.ToString(), o.VatApplied, o.Currency, o.Notes,
         o.TotalHt, o.TotalTva, o.TotalTtc, o.TotalCost, o.Profit,
         o.InvoiceId, o.Invoice?.Reference,
-        lines, o.CreatedAt, o.UpdatedAt);
+        lines,
+        o.LotLines.Select(ToLotLineDto).ToList(),
+        o.CreatedAt, o.UpdatedAt);
+
+    private static CustomerOrderLotLineDto ToLotLineDto(CustomerOrderLotLine l) => new(
+        l.Id, l.CustomerOrderLineId,
+        l.ProductId, l.Product?.Code ?? "", l.Product?.Designation ?? "",
+        l.PurchaseLineId,
+        l.PurchaseLine?.LotNumber ?? "",
+        l.PurchaseLine?.ExpirationDate.HasValue == true ? DateOnly.FromDateTime(l.PurchaseLine.ExpirationDate!.Value) : null,
+        l.QuantityAllocated,
+        l.WarehouseId, l.Warehouse?.Name);
 
     private static CustomerOrderLineDto ToLineDto(CustomerOrderLine l, int available) => new(
         l.Id, l.ProductId,
         l.Product?.Code ?? "", l.Product?.Designation ?? "",
-        l.Quantity, available,
+        l.Quantity, l.QuantityRequested, l.UnitsPerCarton, available,
         l.UnitPriceHt, l.UnitCostPrice,
         l.LineTotalHt, l.LineTotalTva, l.LineTotalTtc, l.LineTotalCost,
         l.LineTotalHt - l.LineTotalCost);

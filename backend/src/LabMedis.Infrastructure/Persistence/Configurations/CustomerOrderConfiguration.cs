@@ -44,5 +44,14 @@ public class CustomerOrderConfiguration : IEntityTypeConfiguration<CustomerOrder
         builder.Navigation(x => x.Lines)
             .HasField("_lines")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(x => x.LotLines)
+            .WithOne(l => l.CustomerOrder)
+            .HasForeignKey(l => l.CustomerOrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(x => x.LotLines)
+            .HasField("_lotLines")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

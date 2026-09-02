@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2 } from 'lucide-react'
+import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2, Package } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto } from '../../api/types'
 import { customerOrdersApi, invoicesApi } from '../../api/endpoints'
@@ -9,7 +9,7 @@ import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { fmtXof } from '../../utils/format'
 
-const READONLY_STATUSES = ['Terminée', 'Annulée']
+const READONLY_STATUSES = ['Terminée', 'Annulée', 'EnPréparation']
 
 const DOC_TYPES = ['BonCommande', 'Proforma', 'Facture', 'Autre']
 const DOC_TYPE_COLORS: Record<string, string> = {
@@ -20,16 +20,18 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  EnAttente: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-  Validée:   'bg-blue-50 text-blue-700 border border-blue-200',
-  Terminée:  'bg-green-50 text-green-700 border border-green-200',
-  Annulée:   'bg-red-50 text-red-500 border border-red-200',
+  EnAttente:      'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  Validée:        'bg-blue-50 text-blue-700 border border-blue-200',
+  EnPréparation:  'bg-purple-50 text-purple-700 border border-purple-200',
+  Terminée:       'bg-green-50 text-green-700 border border-green-200',
+  Annulée:        'bg-red-50 text-red-500 border border-red-200',
 }
 const STATUS_LABELS: Record<string, string> = {
-  EnAttente: 'En attente',
-  Validée:   'Validée',
-  Terminée:  'Terminée',
-  Annulée:   'Annulée',
+  EnAttente:      'En attente',
+  Validée:        'Validée',
+  EnPréparation:  'En préparation',
+  Terminée:       'Terminée',
+  Annulée:        'Annulée',
 }
 
 function formatBytes(b: number) {
@@ -73,7 +75,14 @@ function PrintCustomerBlock({ name }: { name: string }) {
 
 // ── BL print layout (quantities only, no prices) ────────────────────────────
 
+function fmtBLDate(s: string | null) {
+  if (!s) return '—'
+  try { return new Date(s).toLocaleDateString('fr-FR') } catch { return s }
+}
+
 function BLPrintLayout({ order, printDate }: { order: CustomerOrderDto; printDate: string }) {
+  const hasLots = order.lotLines.length > 0
+
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', padding: '15mm 20mm' }}>
       <PrintHeader title="BON DE LIVRAISON" reference={order.reference} date={printDate} />
@@ -84,17 +93,30 @@ function BLPrintLayout({ order, printDate }: { order: CustomerOrderDto; printDat
           <tr style={{ backgroundColor: '#f5f0ff' }}>
             <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'left', fontSize: '10pt' }}>Désignation</th>
             <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'left', fontSize: '10pt', width: '100px' }}>Code</th>
+            {hasLots && <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'left', fontSize: '10pt', width: '110px' }}>N° Lot</th>}
+            {hasLots && <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'left', fontSize: '10pt', width: '90px' }}>Exp.</th>}
             <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'center', fontSize: '10pt', width: '80px' }}>Quantité</th>
           </tr>
         </thead>
         <tbody>
-          {order.lines.map((l, i) => (
-            <tr key={l.id} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px' }}>{l.productDesignation}</td>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', fontFamily: 'monospace', fontSize: '9pt', color: '#555' }}>{l.productCode}</td>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'center', fontWeight: 'bold' }}>{l.quantity}</td>
-            </tr>
-          ))}
+          {hasLots
+            ? order.lotLines.map((l, i) => (
+                <tr key={l.id} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px' }}>{l.productDesignation}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', fontFamily: 'monospace', fontSize: '9pt', color: '#555' }}>{l.productCode}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '9pt' }}>{l.lotNumber}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', fontSize: '9pt', color: '#555' }}>{fmtBLDate(l.expirationDate)}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'center', fontWeight: 'bold' }}>{l.quantityAllocated}</td>
+                </tr>
+              ))
+            : order.lines.map((l, i) => (
+                <tr key={l.id} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px' }}>{l.productDesignation}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', fontFamily: 'monospace', fontSize: '9pt', color: '#555' }}>{l.productCode}</td>
+                  <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'center', fontWeight: 'bold' }}>{l.quantity}</td>
+                </tr>
+              ))
+          }
         </tbody>
       </table>
 
@@ -384,17 +406,31 @@ export function CustomerOrderDetailPage() {
                 <p className="text-sm font-semibold text-gray-700">Lignes de commande</p>
               </div>
               <div className="divide-y divide-gray-50">
-                {order.lines.map(l => (
-                  <div key={l.id} className="px-5 py-3 flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{l.productDesignation}</p>
-                      <p className="text-xs text-gray-400 font-mono">{l.productCode}</p>
+                {order.lines.map(l => {
+                  const hasPackaging = l.unitsPerCarton > 1
+                  const cartons = hasPackaging ? Math.round(l.quantity / l.unitsPerCarton) : null
+                  return (
+                    <div key={l.id} className="px-5 py-3 flex items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{l.productDesignation}</p>
+                        <p className="text-xs text-gray-400 font-mono">{l.productCode}</p>
+                      </div>
+                      <div className="text-sm text-gray-600 text-right">
+                        {l.quantityRequested > 0 && l.quantityRequested !== l.quantity && (
+                          <p className="text-xs text-gray-400">Demandé : {l.quantityRequested}</p>
+                        )}
+                        <p className="font-medium">
+                          {hasPackaging && cartons !== null
+                            ? <>{cartons} ctn × {l.unitsPerCarton} = <strong>{l.quantity}</strong> u.</>
+                            : <>{l.quantity} u.</>
+                          }
+                        </p>
+                      </div>
+                      <div className="text-sm text-gray-600 w-28 text-right">{fmtXof(l.unitPriceHt)} / u.</div>
+                      <div className="text-sm font-semibold text-gray-900 w-28 text-right">{fmtXof(l.lineTotalHt)}</div>
                     </div>
-                    <div className="text-sm text-gray-600 w-16 text-right">Qté {l.quantity}</div>
-                    <div className="text-sm text-gray-600 w-28 text-right">{fmtXof(l.unitPriceHt)} / u.</div>
-                    <div className="text-sm font-semibold text-gray-900 w-28 text-right">{fmtXof(l.lineTotalHt)}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex flex-col gap-1.5">
                 <div className="flex justify-between text-sm">
@@ -425,6 +461,43 @@ export function CustomerOrderDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* Lot lines (when prepared or completed) */}
+            {order.lotLines.length > 0 && (
+              <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-purple-100 bg-purple-50 flex items-center gap-2">
+                  <Package size={14} className="text-purple-500" />
+                  <p className="text-sm font-semibold text-purple-800">Lots préparés pour livraison</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" style={{ minWidth: '560px' }}>
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left">Produit</th>
+                        <th className="px-4 py-2.5 text-left">N° Lot</th>
+                        <th className="px-4 py-2.5 text-left">Date exp.</th>
+                        <th className="px-4 py-2.5 text-right">Qté</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {order.lotLines.map(l => (
+                        <tr key={l.id} className="hover:bg-gray-50/50">
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-gray-900">{l.productDesignation}</p>
+                            <p className="text-xs text-gray-400 font-mono">{l.productCode}</p>
+                          </td>
+                          <td className="px-4 py-2.5 font-mono font-semibold text-gray-800">{l.lotNumber}</td>
+                          <td className="px-4 py-2.5 text-gray-600 text-xs">
+                            {l.expirationDate ? new Date(l.expirationDate).toLocaleDateString('fr-FR') : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-bold text-gray-900">{l.quantityAllocated}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Documents */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -550,6 +623,17 @@ export function CustomerOrderDetailPage() {
                 </button>
               )}
             </div>
+
+            {/* Prepare (only if Validée) */}
+            {order.status === 'Validée' && (
+              <Button
+                onClick={() => navigate(`/orders/customers/${id}/prepare`)}
+                className="w-full justify-center"
+              >
+                <Package size={14} />
+                Préparer la commande
+              </Button>
+            )}
 
             {/* Edit (only if not readonly) */}
             {!isReadonly && (

@@ -18,6 +18,8 @@ import { CustomerInvoicesPage } from './pages/invoices/CustomerInvoicesPage'
 import { SupplierInvoicesPage } from './pages/invoices/SupplierInvoicesPage'
 import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage'
 import { SupplierInvoiceDetailPage } from './pages/invoices/SupplierInvoiceDetailPage'
+import { CustomerCreditNoteCreatePage } from './pages/invoices/CustomerCreditNoteCreatePage'
+import { CustomerCreditNoteDetailPage } from './pages/invoices/CustomerCreditNoteDetailPage'
 import { DeliveriesPage } from './pages/deliveries/DeliveriesPage'
 import { StockMovementsPage } from './pages/stock/StockMovementsPage'
 import { CategoriesPage } from './pages/config/CategoriesPage'
@@ -47,6 +49,7 @@ import { ReceiveProformaPage } from './pages/orders/ReceiveProformaPage'
 import { ReceiveInvoicePage } from './pages/orders/ReceiveInvoicePage'
 import { ReceiveGoodsPage } from './pages/orders/ReceiveGoodsPage'
 import { ReceptionsPage } from './pages/orders/ReceptionsPage'
+import { CustomerOrderPreparationPage } from './pages/orders/CustomerOrderPreparationPage'
 
 function ProtectedRoutes() {
   const { user, isLoading } = useAuth()
@@ -86,6 +89,7 @@ export default function App() {
               <Route path="/orders/customers/new" element={<CustomerOrderFormPage />} />
               <Route path="/orders/customers/:id" element={<CustomerOrderDetailPage />} />
               <Route path="/orders/customers/:id/edit" element={<CustomerOrderFormPage />} />
+              <Route path="/orders/customers/:id/prepare" element={<CustomerOrderPreparationPage />} />
               <Route path="/orders/suppliers" element={<SupplierOrdersPage />} />
               <Route path="/orders/suppliers/new" element={<SupplierOrderFormPage />} />
               <Route path="/orders/suppliers/:id/edit" element={<SupplierOrderFormPage />} />
@@ -96,6 +100,8 @@ export default function App() {
               <Route path="/purchases" element={<PurchasesPage />} />
               <Route path="/invoices" element={<Navigate to="/invoices/customers" replace />} />
               <Route path="/invoices/customers" element={<CustomerInvoicesPage />} />
+              <Route path="/invoices/customers/credit-notes/new" element={<CustomerCreditNoteCreatePage />} />
+              <Route path="/invoices/customers/credit-notes/:id" element={<CustomerCreditNoteDetailPage />} />
               <Route path="/invoices/customers/:id" element={<InvoiceDetailPage />} />
               <Route path="/invoices/suppliers" element={<SupplierInvoicesPage />} />
               <Route path="/invoices/suppliers/:id" element={<SupplierInvoiceDetailPage />} />

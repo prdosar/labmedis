@@ -19,5 +19,6 @@ public record CustomerOrderDto(
     long? InvoiceId,
     string? InvoiceReference,
     IReadOnlyList<CustomerOrderLineDto> Lines,
+    IReadOnlyList<CustomerOrderLotLineDto> LotLines,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

@@ -40,12 +40,16 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<JournalLine> JournalLines => Set<JournalLine>();
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<CustomerOrderLine> CustomerOrderLines => Set<CustomerOrderLine>();
+    public DbSet<CustomerOrderLotLine> CustomerOrderLotLines => Set<CustomerOrderLotLine>();
     public DbSet<SupplierOrder> SupplierOrders => Set<SupplierOrder>();
     public DbSet<SupplierOrderLine> SupplierOrderLines => Set<SupplierOrderLine>();
     public DbSet<SupplierOrderDocument> SupplierOrderDocuments => Set<SupplierOrderDocument>();
     public DbSet<CustomerOrderDocument> CustomerOrderDocuments => Set<CustomerOrderDocument>();
     public DbSet<SupplierProformaRejection> SupplierProformaRejections => Set<SupplierProformaRejection>();
     public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<SupplierCreditNote> SupplierCreditNotes => Set<SupplierCreditNote>();
+    public DbSet<CustomerCreditNote> CustomerCreditNotes => Set<CustomerCreditNote>();
+    public DbSet<CustomerCreditNoteLine> CustomerCreditNoteLines => Set<CustomerCreditNoteLine>();
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
     public DbSet<SupplierInvoicePayment> SupplierInvoicePayments => Set<SupplierInvoicePayment>();
 

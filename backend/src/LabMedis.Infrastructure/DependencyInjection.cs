@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<ICustomerOrderService, CustomerOrderService>();
         services.AddScoped<ISupplierOrderService, SupplierOrderService>();
+        services.AddScoped<ICustomerCreditNoteService, CustomerCreditNoteService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
         services.AddScoped<IEmailService, EmailService>();
 

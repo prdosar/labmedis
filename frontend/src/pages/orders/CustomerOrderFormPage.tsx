@@ -11,16 +11,23 @@ import { fmtXof } from '../../utils/format'
 
 interface LineInput {
   productId: string
-  quantity: string
+  quantity: string           // livré = numberOfCartons × unitsPerCarton
+  quantityRequested: string  // what the client asked
+  numberOfCartons: string    // carton count chosen by user
+  unitsPerCarton: number     // from product packaging
   availableStock: number
 }
 
-const emptyLine = (): LineInput => ({ productId: '', quantity: '1', availableStock: 0 })
+const emptyLine = (): LineInput => ({
+  productId: '', quantity: '1', quantityRequested: '1',
+  numberOfCartons: '1', unitsPerCarton: 1, availableStock: 0,
+})
 
-
-// Grid template: with or without TVA columns
+// Grid template: Produit | Cdt | Demandé | Cartons | Livré | Prix HT | [TVA] | [TTC] | Del
 const gridTpl = (vat: boolean) =>
-  vat ? '1fr 5.5rem 7.5rem 6.5rem 7.5rem 2rem' : '1fr 5.5rem 8rem 2rem'
+  vat
+    ? '1fr 3.5rem 5.5rem 5rem 5rem 7.5rem 6.5rem 7.5rem 2rem'
+    : '1fr 3.5rem 5.5rem 5rem 5rem 8rem 2rem'
 
 export function CustomerOrderFormPage() {
   const { id } = useParams<{ id?: string }>()
@@ -52,7 +59,7 @@ export function CustomerOrderFormPage() {
   useEffect(() => {
     if (!isEdit || !id) return
     customerOrdersApi.getById(Number(id)).then(order => {
-      if (order.status === 'Terminée' || order.status === 'Annulée') {
+      if (order.status === 'Terminée' || order.status === 'Annulée' || order.status === 'EnPréparation') {
         navigate(`/orders/customers/${id}`, { replace: true })
         return
       }
@@ -61,11 +68,18 @@ export function CustomerOrderFormPage() {
       setVatApplied(order.vatApplied)
       setCurrency(order.currency ?? 'XOF')
       setNotes(order.notes ?? '')
-      setLines(order.lines.map(l => ({
-        productId: String(l.productId),
-        quantity: String(l.quantity),
-        availableStock: l.availableStock,
-      })))
+      setLines(order.lines.map(l => {
+        const upc = l.unitsPerCarton > 0 ? l.unitsPerCarton : 1
+        const cartons = upc > 1 ? Math.round(l.quantity / upc) : l.quantity
+        return {
+          productId: String(l.productId),
+          quantity: String(l.quantity),
+          quantityRequested: String(l.quantityRequested || l.quantity),
+          numberOfCartons: String(cartons),
+          unitsPerCarton: upc,
+          availableStock: l.availableStock,
+        }
+      }))
     }).catch(() => toast('Commande introuvable.', 'error'))
   }, [isEdit, id])
 
@@ -85,7 +99,12 @@ export function CustomerOrderFormPage() {
       try {
         const result = await customerOrdersApi.preview({
           vatApplied,
-          lines: validLines.map(l => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
+          lines: validLines.map(l => ({
+          productId: Number(l.productId),
+          quantity: Number(l.quantity),
+          quantityRequested: parseInt(l.quantityRequested) || Number(l.quantity),
+          unitsPerCarton: l.unitsPerCarton,
+        })),
         })
         setPreview(result)
         setLines(prev => {
@@ -93,7 +112,9 @@ export function CustomerOrderFormPage() {
           return prev.map(l => {
             if (!l.productId || Number(l.quantity) <= 0) return l
             const pl = result.lines[pi++]
-            return pl ? { ...l, availableStock: pl.availableStock } : l
+            if (!pl) return l
+            const upc = pl.unitsPerCarton > 0 ? pl.unitsPerCarton : l.unitsPerCarton
+            return { ...l, availableStock: pl.availableStock, unitsPerCarton: upc }
           })
         })
       } catch { setPreview(null) }
@@ -104,15 +125,35 @@ export function CustomerOrderFormPage() {
 
   const handleProductChange = useCallback(async (idx: number, productId: string) => {
     if (!productId) {
-      setLines(prev => prev.map((l, i) => i === idx ? { ...l, productId: '', availableStock: 0 } : l))
+      setLines(prev => prev.map((l, i) => i === idx ? { ...l, productId: '', availableStock: 0, unitsPerCarton: 1 } : l))
       return
     }
-    const available = await customerOrdersApi.getStock(Number(productId), isEdit && id ? Number(id) : undefined)
-    setLines(prev => prev.map((l, i) => i === idx ? { ...l, productId, availableStock: available } : l))
+    const info = await customerOrdersApi.getStock(Number(productId), isEdit && id ? Number(id) : undefined)
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx) return l
+      const upc = info.unitsPerCarton > 0 ? info.unitsPerCarton : 1
+      const requested = parseInt(l.quantityRequested) || 1
+      const cartons = Math.ceil(requested / upc)
+      return { ...l, productId, availableStock: info.availableStock, unitsPerCarton: upc, numberOfCartons: String(cartons), quantity: String(cartons * upc) }
+    }))
   }, [isEdit, id])
 
-  const updateQty = (idx: number, qty: string) =>
-    setLines(prev => prev.map((l, i) => i === idx ? { ...l, quantity: qty } : l))
+  const handleQuantityRequestedChange = (idx: number, val: string) =>
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx) return l
+      const requested = parseInt(val) || 0
+      const upc = l.unitsPerCarton > 0 ? l.unitsPerCarton : 1
+      const cartons = requested > 0 ? Math.ceil(requested / upc) : 0
+      return { ...l, quantityRequested: val, numberOfCartons: String(cartons), quantity: String(cartons * upc) }
+    }))
+
+  const handleNumberOfCartonsChange = (idx: number, val: string) =>
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx) return l
+      const cartons = parseInt(val) || 0
+      const upc = l.unitsPerCarton > 0 ? l.unitsPerCarton : 1
+      return { ...l, numberOfCartons: val, quantity: String(cartons * upc) }
+    }))
 
   const removeLine = (idx: number) =>
     setLines(prev => prev.length === 1 ? [emptyLine()] : prev.filter((_, i) => i !== idx))
@@ -129,7 +170,12 @@ export function CustomerOrderFormPage() {
         vatApplied,
         currency,
         notes: notes.trim() || null,
-        lines: validLines.map(l => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
+        lines: validLines.map(l => ({
+          productId: Number(l.productId),
+          quantity: Number(l.quantity),
+          quantityRequested: parseInt(l.quantityRequested) || Number(l.quantity),
+          unitsPerCarton: l.unitsPerCarton,
+        })),
       }
       if (isEdit && id) { await customerOrdersApi.update(Number(id), dto); toast('Commande mise à jour.') }
       else { await customerOrdersApi.create(dto); toast('Commande créée.') }
@@ -277,7 +323,10 @@ export function CustomerOrderFormPage() {
               style={{ gridTemplateColumns: gridTpl(vatApplied) }}
             >
               <span>Produit</span>
-              <span>Qté</span>
+              <span className="text-center">Cdt</span>
+              <span className="text-right">Demandé</span>
+              <span className="text-right">Cartons</span>
+              <span className="text-right">Livré</span>
               <span className="text-right">Prix HT</span>
               {vatApplied && <span className="text-right">TVA 18%</span>}
               {vatApplied && <span className="text-right">TTC</span>}
@@ -288,7 +337,8 @@ export function CustomerOrderFormPage() {
             <div className="divide-y divide-gray-50">
               {lines.map((line, idx) => {
                 const pl = getPreviewLine(idx)
-                const qtyOver = line.productId && Number(line.quantity) > line.availableStock
+                const livré = Number(line.quantity)
+                const qtyOver = line.productId && livré > line.availableStock
 
                 return (
                   <div
@@ -304,17 +354,40 @@ export function CustomerOrderFormPage() {
                       placeholder="Rechercher un produit…"
                     />
 
-                    {/* Qty */}
+                    {/* Conditionnement */}
+                    <div className="flex items-center justify-center py-2">
+                      <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                        ×{line.unitsPerCarton}
+                      </span>
+                    </div>
+
+                    {/* Qté demandée */}
                     <div>
                       <input
                         type="number"
                         min={1}
-                        value={line.quantity}
-                        onChange={e => updateQty(idx, e.target.value)}
-                        className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 ${
-                          qtyOver ? 'border-red-400' : 'border-gray-300 focus:border-brand-500'
-                        }`}
+                        value={line.quantityRequested}
+                        onChange={e => handleQuantityRequestedChange(idx, e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm text-right text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                       />
+                    </div>
+
+                    {/* Cartons */}
+                    <div>
+                      <input
+                        type="number"
+                        min={1}
+                        value={line.numberOfCartons}
+                        onChange={e => handleNumberOfCartonsChange(idx, e.target.value)}
+                        className="w-full rounded-lg border border-brand-200 bg-brand-50 px-2 py-2 text-sm text-right text-brand-800 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                      />
+                    </div>
+
+                    {/* Livré */}
+                    <div className="flex flex-col items-end py-1">
+                      <span className={`text-sm font-bold ${qtyOver ? 'text-red-600' : 'text-gray-900'}`}>
+                        {livré > 0 ? livré : '—'}
+                      </span>
                       {line.productId && (
                         <p className={`mt-0.5 text-xs ${qtyOver ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
                           Dispo : {line.availableStock}

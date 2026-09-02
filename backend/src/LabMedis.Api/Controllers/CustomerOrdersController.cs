@@ -47,6 +47,14 @@ public class CustomerOrdersController : ControllerBase
     public async Task<ActionResult<CustomerOrderDto>> Validate(long id, CancellationToken ct)
         => Ok(await _service.ValidateAsync(id, ct));
 
+    [HttpGet("{id:long}/suggested-lots")]
+    public async Task<ActionResult<IReadOnlyList<CustomerOrderSuggestedLotDto>>> GetSuggestedLots(long id, CancellationToken ct)
+        => Ok(await _service.GetSuggestedLotsAsync(id, ct));
+
+    [HttpPost("{id:long}/prepare")]
+    public async Task<ActionResult<CustomerOrderDto>> Prepare(long id, [FromBody] PrepareOrderDto dto, CancellationToken ct)
+        => Ok(await _service.PrepareAsync(id, dto, ct));
+
     [HttpPost("{id:long}/complete")]
     public async Task<ActionResult<CustomerOrderDto>> Complete(long id, CancellationToken ct)
         => Ok(await _service.CompleteAsync(id, ct));
@@ -60,8 +68,8 @@ public class CustomerOrdersController : ControllerBase
         => Ok(await _service.PreviewAsync(dto, ct));
 
     [HttpGet("stock/{productId:long}")]
-    public async Task<ActionResult<int>> GetStock(long productId, [FromQuery] long? excludeOrderId = null, CancellationToken ct = default)
-        => Ok(await _service.GetAvailableStockAsync(productId, excludeOrderId, ct));
+    public async Task<ActionResult<ProductStockInfoDto>> GetStock(long productId, [FromQuery] long? excludeOrderId = null, CancellationToken ct = default)
+        => Ok(await _service.GetStockInfoAsync(productId, excludeOrderId, ct));
 
     [HttpGet("customer-stats/{customerId:long}")]
     public async Task<ActionResult<CustomerStatsDto>> GetCustomerStats(long customerId, CancellationToken ct)

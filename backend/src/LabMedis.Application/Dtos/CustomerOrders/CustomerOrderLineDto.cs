@@ -6,6 +6,8 @@ public record CustomerOrderLineDto(
     string ProductCode,
     string ProductDesignation,
     int Quantity,
+    int QuantityRequested,
+    int UnitsPerCarton,
     int AvailableStock,
     decimal UnitPriceHt,
     decimal UnitCostPrice,

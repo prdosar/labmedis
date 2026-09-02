@@ -6,6 +6,7 @@ namespace LabMedis.Domain.Entities;
 public class CustomerOrder : BaseEntity
 {
     private readonly List<CustomerOrderLine> _lines = new();
+    private readonly List<CustomerOrderLotLine> _lotLines = new();
 
     public string Reference { get; private set; } = string.Empty;
     public DateTime OrderDate { get; set; }
@@ -28,6 +29,7 @@ public class CustomerOrder : BaseEntity
     public decimal Profit { get; set; }
 
     public IReadOnlyCollection<CustomerOrderLine> Lines => _lines;
+    public IReadOnlyCollection<CustomerOrderLotLine> LotLines => _lotLines;
 
     public void SetReference(string reference) => Reference = reference;
 
@@ -41,10 +43,17 @@ public class CustomerOrder : BaseEntity
         Status = CustomerOrderStatus.Validée;
     }
 
-    public void Complete()
+    public void StartPreparation()
     {
         if (Status != CustomerOrderStatus.Validée)
-            throw new DomainException("Seule une commande validée peut être clôturée.");
+            throw new DomainException("Seule une commande validée peut passer en préparation.");
+        Status = CustomerOrderStatus.EnPréparation;
+    }
+
+    public void Complete()
+    {
+        if (Status != CustomerOrderStatus.Validée && Status != CustomerOrderStatus.EnPréparation)
+            throw new DomainException("Seule une commande validée ou en préparation peut être clôturée.");
         Status = CustomerOrderStatus.Terminée;
     }
 

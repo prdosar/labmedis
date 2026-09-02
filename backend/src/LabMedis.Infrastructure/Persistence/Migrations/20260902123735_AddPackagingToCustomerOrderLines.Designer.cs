@@ -3,6 +3,7 @@ using System;
 using LabMedis.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LabMedis.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902123735_AddPackagingToCustomerOrderLines")]
+    partial class AddPackagingToCustomerOrderLines
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -561,56 +564,6 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProductId");
 
                     b.ToTable("customer_order_lines", (string)null);
-                });
-
-            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrderLotLine", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<long>("CustomerOrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("CustomerOrderLineId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<long>("ProductId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("PurchaseLineId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("QuantityAllocated")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<long>("WarehouseId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerOrderId");
-
-                    b.HasIndex("CustomerOrderLineId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PurchaseLineId");
-
-                    b.HasIndex("WarehouseId");
-
-                    b.ToTable("customer_order_lot_lines", (string)null);
                 });
 
             modelBuilder.Entity("LabMedis.Domain.Entities.CustomsRegime", b =>
@@ -2517,49 +2470,6 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrderLotLine", b =>
-                {
-                    b.HasOne("LabMedis.Domain.Entities.CustomerOrder", "CustomerOrder")
-                        .WithMany("LotLines")
-                        .HasForeignKey("CustomerOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LabMedis.Domain.Entities.CustomerOrderLine", "CustomerOrderLine")
-                        .WithMany()
-                        .HasForeignKey("CustomerOrderLineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LabMedis.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LabMedis.Domain.Entities.PurchaseLine", "PurchaseLine")
-                        .WithMany()
-                        .HasForeignKey("PurchaseLineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LabMedis.Domain.Entities.Warehouse", "Warehouse")
-                        .WithMany()
-                        .HasForeignKey("WarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CustomerOrder");
-
-                    b.Navigation("CustomerOrderLine");
-
-                    b.Navigation("Product");
-
-                    b.Navigation("PurchaseLine");
-
-                    b.Navigation("Warehouse");
-                });
-
             modelBuilder.Entity("LabMedis.Domain.Entities.Delivery", b =>
                 {
                     b.HasOne("LabMedis.Domain.Entities.Invoice", "Invoice")
@@ -3072,8 +2982,6 @@ namespace LabMedis.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("LabMedis.Domain.Entities.CustomerOrder", b =>
                 {
                     b.Navigation("Lines");
-
-                    b.Navigation("LotLines");
                 });
 
             modelBuilder.Entity("LabMedis.Domain.Entities.CustomsRegime", b =>

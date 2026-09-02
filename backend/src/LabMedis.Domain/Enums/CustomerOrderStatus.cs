@@ -5,5 +5,6 @@ public enum CustomerOrderStatus
     EnAttente = 0,
     Validée = 1,
     Terminée = 2,
-    Annulée = 3
+    Annulée = 3,
+    EnPréparation = 4
 }

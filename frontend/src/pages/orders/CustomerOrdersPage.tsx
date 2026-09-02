@@ -15,6 +15,7 @@ import { fmtXof } from '../../utils/format'
 const STATUS_LABELS: Record<string, string> = {
   EnAttente: 'En attente',
   Validée: 'Validée',
+  EnPréparation: 'En préparation',
   Terminée: 'Terminée',
   Annulée: 'Annulée',
 }
@@ -22,11 +23,12 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   EnAttente: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   Validée: 'bg-blue-50 text-blue-700 border border-blue-200',
+  EnPréparation: 'bg-purple-50 text-purple-700 border border-purple-200',
   Terminée: 'bg-green-50 text-green-700 border border-green-200',
   Annulée: 'bg-red-50 text-red-500 border border-red-200',
 }
 
-const STATUSES = ['', 'EnAttente', 'Validée', 'Terminée', 'Annulée']
+const STATUSES = ['', 'EnAttente', 'Validée', 'EnPréparation', 'Terminée', 'Annulée']
 
 const searchInputClass = 'rounded-lg border border-gray-300 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
@@ -179,7 +181,7 @@ export function CustomerOrdersPage() {
             <button
               title={row.status === 'Terminée' || row.status === 'Annulée' ? 'Voir le détail' : 'Voir / Modifier'}
               onClick={() => navigate(
-                row.status === 'Terminée' || row.status === 'Annulée'
+                row.status === 'Terminée' || row.status === 'Annulée' || row.status === 'EnPréparation'
                   ? `/orders/customers/${row.id}`
                   : `/orders/customers/${row.id}/edit`
               )}
@@ -187,7 +189,7 @@ export function CustomerOrdersPage() {
             >
               <Eye size={14} />
             </button>
-            {(row.status === 'EnAttente' || row.status === 'Validée') && (
+            {(row.status === 'EnAttente' || row.status === 'Validée' || row.status === 'EnPréparation') && (
               <>
                 {row.status === 'EnAttente' && (
                   <button
@@ -198,7 +200,7 @@ export function CustomerOrdersPage() {
                     <CheckCircle size={14} />
                   </button>
                 )}
-                {row.status === 'Validée' && (
+                {(row.status === 'Validée' || row.status === 'EnPréparation') && (
                   <button
                     title="Clôturer (livré)"
                     onClick={() => setConfirmAction({ order: row, action: 'complete' })}

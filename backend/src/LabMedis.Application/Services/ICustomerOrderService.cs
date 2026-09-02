@@ -10,10 +10,13 @@ public interface ICustomerOrderService
     Task<CustomerOrderDto> CreateAsync(CustomerOrderCreateDto dto, CancellationToken ct = default);
     Task<CustomerOrderDto?> UpdateAsync(long id, CustomerOrderUpdateDto dto, CancellationToken ct = default);
     Task<CustomerOrderDto> ValidateAsync(long id, CancellationToken ct = default);
+    Task<IReadOnlyList<CustomerOrderSuggestedLotDto>> GetSuggestedLotsAsync(long orderId, CancellationToken ct = default);
+    Task<CustomerOrderDto> PrepareAsync(long orderId, PrepareOrderDto dto, CancellationToken ct = default);
     Task<CustomerOrderDto> CompleteAsync(long id, CancellationToken ct = default);
     Task<CustomerOrderDto> CancelAsync(long id, CancellationToken ct = default);
     Task<CustomerOrderPreviewDto> PreviewAsync(CustomerOrderPreviewRequestDto dto, CancellationToken ct = default);
     Task<int> GetAvailableStockAsync(long productId, long? excludeOrderId = null, CancellationToken ct = default);
+    Task<ProductStockInfoDto> GetStockInfoAsync(long productId, long? excludeOrderId = null, CancellationToken ct = default);
     Task<CustomerStatsDto> GetCustomerStatsAsync(long customerId, CancellationToken ct = default);
     // Documents
     Task<IReadOnlyList<CustomerOrderDocumentDto>> GetDocumentsAsync(long orderId, CancellationToken ct = default);
