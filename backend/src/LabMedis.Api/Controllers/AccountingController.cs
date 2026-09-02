@@ -19,6 +19,26 @@ public class AccountingController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ChartAccountDto>>> GetChartOfAccounts(CancellationToken ct)
         => Ok(await _service.GetChartOfAccountsAsync(ct));
 
+    [HttpPost("chart-of-accounts")]
+    public async Task<ActionResult<ChartAccountDto>> CreateChartAccount(
+        [FromBody] CreateChartAccountDto dto, CancellationToken ct)
+    {
+        var created = await _service.CreateChartAccountAsync(dto, ct);
+        return CreatedAtAction(nameof(GetChartOfAccounts), new { }, created);
+    }
+
+    [HttpPut("chart-of-accounts/{id:long}")]
+    public async Task<ActionResult<ChartAccountDto>> UpdateChartAccount(
+        long id, [FromBody] UpdateChartAccountDto dto, CancellationToken ct)
+        => Ok(await _service.UpdateChartAccountAsync(id, dto, ct));
+
+    [HttpDelete("chart-of-accounts/{id:long}")]
+    public async Task<IActionResult> DeleteChartAccount(long id, CancellationToken ct)
+    {
+        await _service.DeleteChartAccountAsync(id, ct);
+        return NoContent();
+    }
+
     // ── Journal ─────────────────────────────────────────────────────────────
 
     [HttpGet("journal")]

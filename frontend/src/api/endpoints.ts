@@ -279,6 +279,15 @@ export const accountingApi = {
   getChartOfAccounts: () =>
     api.get<ChartAccountDto[]>('/accounting/chart-of-accounts'),
 
+  createChartAccount: (dto: { code: string; name: string; accountClass: string; normalBalance: string; isThirdParty: boolean; parentCode: string | null }) =>
+    api.post<ChartAccountDto>('/accounting/chart-of-accounts', dto),
+
+  updateChartAccount: (id: number, dto: { name: string; isThirdParty: boolean; parentCode: string | null }) =>
+    api.put<ChartAccountDto>(`/accounting/chart-of-accounts/${id}`, dto),
+
+  deleteChartAccount: (id: number) =>
+    api.delete<void>(`/accounting/chart-of-accounts/${id}`),
+
   getJournal: (params: { page?: number; size?: number; journalCode?: string; from?: string; to?: string; search?: string }) => {
     const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
     if (params.journalCode) qs.set('journalCode', params.journalCode)

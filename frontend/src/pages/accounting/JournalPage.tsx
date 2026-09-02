@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, Search, X, Paperclip } from 'lucide-react'
-import type { ChartAccountDto, JournalEntryDto, ManualJournalEntryInput } from '../../api/types'
-import { accountingApi } from '../../api/endpoints'
+import type { ChartAccountDto, CustomerDto, JournalEntryDto, ManualJournalEntryInput, SupplierDto } from '../../api/types'
+import { accountingApi, customersApi, suppliersApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
@@ -10,6 +10,7 @@ import { Pagination } from '../../components/ui/Pagination'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Input, Select } from '../../components/ui/Input'
+import { AccountCombobox } from '../../components/ui/AccountCombobox'
 import { useEffect } from 'react'
 
 const journalBadge: Record<string, string> = {
@@ -41,9 +42,10 @@ const fmtDate = (s: string) =>
 
 const selectClass = 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
 
-interface LineForm { accountId: string; label: string; debitAmount: string; creditAmount: string }
+// tiersId = "c-{id}" for customer, "s-{id}" for supplier, "" for none
+interface LineForm { accountId: string; label: string; debitAmount: string; creditAmount: string; tiersId: string }
 
-const emptyLine = (): LineForm => ({ accountId: '', label: '', debitAmount: '', creditAmount: '' })
+const emptyLine = (): LineForm => ({ accountId: '', label: '', debitAmount: '', creditAmount: '', tiersId: '' })
 
 function ExpandedEntry({ entry }: { entry: JournalEntryDto }) {
   const totalDebit = entry.lines.reduce((s, l) => s + l.debitAmount, 0)
@@ -120,6 +122,8 @@ export function JournalPage() {
   // Manual entry modal
   const [modalOpen, setModalOpen] = useState(false)
   const [accounts, setAccounts] = useState<ChartAccountDto[]>([])
+  const [customers, setCustomers] = useState<CustomerDto[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierDto[]>([])
   const [form, setForm] = useState({ journalCode: 'JOD', entryDate: new Date().toISOString().slice(0, 10), reference: '', description: '', attachmentFileName: '', attachmentPath: '' })
   const [lines, setLines] = useState<LineForm[]>([emptyLine(), emptyLine()])
   const [saving, setSaving] = useState(false)
@@ -130,6 +134,8 @@ export function JournalPage() {
     setForm({ journalCode: 'JOD', entryDate: new Date().toISOString().slice(0, 10), reference: '', description: '', attachmentFileName: '', attachmentPath: '' })
     setLines([emptyLine(), emptyLine()])
     if (accounts.length === 0) accountingApi.getChartOfAccounts().then(setAccounts).catch(() => {})
+    if (customers.length === 0) customersApi.getForSelect().then(setCustomers).catch(() => {})
+    if (suppliers.length === 0) suppliersApi.getForSelect().then(setSuppliers).catch(() => {})
     setModalOpen(true)
   }
 
@@ -159,8 +165,8 @@ export function JournalPage() {
           label: l.label || null,
           debitAmount: parseFloat(l.debitAmount) || 0,
           creditAmount: parseFloat(l.creditAmount) || 0,
-          customerId: null,
-          supplierId: null,
+          customerId: l.tiersId.startsWith('c-') ? Number(l.tiersId.slice(2)) : null,
+          supplierId: l.tiersId.startsWith('s-') ? Number(l.tiersId.slice(2)) : null,
         })),
       }
       await accountingApi.postManualEntry(dto)
@@ -282,36 +288,67 @@ export function JournalPage() {
               Lignes de l'écriture
             </div>
             <div className="divide-y divide-gray-100">
-              {lines.map((l, i) => (
-                <div key={i} className="px-4 py-3 grid grid-cols-5 gap-3 items-end">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Compte</label>
-                    <select value={l.accountId} onChange={e => setLine(i, { accountId: e.target.value })} className={`${selectClass} w-full`}>
-                      <option value="">Choisir…</option>
-                      {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Libellé</label>
-                    <input type="text" value={l.label} onChange={e => setLine(i, { label: e.target.value })} className={`${selectClass} w-full`} placeholder="Libellé ligne" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Débit XOF</label>
-                    <input type="number" min="0" step="1" value={l.debitAmount} onChange={e => setLine(i, { debitAmount: e.target.value })} className={`${selectClass} w-full`} placeholder="0" />
-                  </div>
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Crédit XOF</label>
-                      <input type="number" min="0" step="1" value={l.creditAmount} onChange={e => setLine(i, { creditAmount: e.target.value })} className={`${selectClass} w-full`} placeholder="0" />
+              {lines.map((l, i) => {
+                const selectedAcc = accounts.find(a => String(a.id) === l.accountId)
+                const isThirdParty = selectedAcc?.isThirdParty ?? false
+                return (
+                  <div key={i} className="px-4 py-3 flex flex-col gap-2">
+                    <div className="grid grid-cols-5 gap-3 items-end">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Compte</label>
+                        <AccountCombobox
+                          accounts={accounts}
+                          value={l.accountId}
+                          onChange={v => setLine(i, { accountId: v, tiersId: '' })}
+                          valueField="id"
+                          placeholder="Code ou libellé…"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Libellé</label>
+                        <input type="text" value={l.label} onChange={e => setLine(i, { label: e.target.value })} className={`${selectClass} w-full`} placeholder="Libellé ligne" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Débit XOF</label>
+                        <input type="number" min="0" step="1" value={l.debitAmount} onChange={e => setLine(i, { debitAmount: e.target.value })} className={`${selectClass} w-full`} placeholder="0" />
+                      </div>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Crédit XOF</label>
+                          <input type="number" min="0" step="1" value={l.creditAmount} onChange={e => setLine(i, { creditAmount: e.target.value })} className={`${selectClass} w-full`} placeholder="0" />
+                        </div>
+                        {lines.length > 2 && (
+                          <button onClick={() => removeLine(i)} className="mb-0.5 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {lines.length > 2 && (
-                      <button onClick={() => removeLine(i)} className="mb-0.5 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <X size={14} />
-                      </button>
+                    {isThirdParty && (
+                      <div className="pl-0">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Tiers (client ou fournisseur)</label>
+                        <select
+                          value={l.tiersId}
+                          onChange={e => setLine(i, { tiersId: e.target.value })}
+                          className={`${selectClass} w-full max-w-xs`}
+                        >
+                          <option value="">— Aucun tiers —</option>
+                          {customers.length > 0 && (
+                            <optgroup label="Clients">
+                              {customers.map(c => <option key={`c-${c.id}`} value={`c-${c.id}`}>{c.code} — {c.name}</option>)}
+                            </optgroup>
+                          )}
+                          {suppliers.length > 0 && (
+                            <optgroup label="Fournisseurs">
+                              {suppliers.map(s => <option key={`s-${s.id}`} value={`s-${s.id}`}>{s.code} — {s.name}</option>)}
+                            </optgroup>
+                          )}
+                        </select>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between">
               <button onClick={addLine} className="text-xs text-brand-600 hover:text-brand-800 font-medium flex items-center gap-1">

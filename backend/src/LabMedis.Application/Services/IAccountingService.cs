@@ -13,6 +13,9 @@ public interface IAccountingService
     Task<IReadOnlyList<ChartAccountDto>> GetChartOfAccountsAsync(CancellationToken ct = default);
     Task<ChartAccountDto?> GetAccountByCodeAsync(string code, CancellationToken ct = default);
     Task<ChartAccount> RequireAccountAsync(string code, CancellationToken ct = default);
+    Task<ChartAccountDto> CreateChartAccountAsync(CreateChartAccountDto dto, CancellationToken ct = default);
+    Task<ChartAccountDto> UpdateChartAccountAsync(long id, UpdateChartAccountDto dto, CancellationToken ct = default);
+    Task DeleteChartAccountAsync(long id, CancellationToken ct = default);
 
     // Journal
     Task<PagedResult<JournalEntryDto>> GetJournalAsync(

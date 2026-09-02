@@ -59,6 +59,73 @@ public class AccountingService : BaseRepository<JournalEntry>, IAccountingServic
         return account;
     }
 
+    public async Task<ChartAccountDto> CreateChartAccountAsync(CreateChartAccountDto dto, CancellationToken ct = default)
+    {
+        if (await DbContext.ChartAccounts.AnyAsync(a => a.Code == dto.Code, ct))
+            throw new DomainException($"Un compte avec le code '{dto.Code}' existe déjà.");
+
+        if (!Enum.TryParse<AccountClass>(dto.AccountClass, out var accountClass))
+            throw new DomainException($"Classe de compte invalide : {dto.AccountClass}.");
+
+        if (!Enum.TryParse<NormalBalance>(dto.NormalBalance, out var normalBalance))
+            throw new DomainException($"Sens invalide : {dto.NormalBalance}.");
+
+        if (dto.ParentCode is not null && !await DbContext.ChartAccounts.AnyAsync(a => a.Code == dto.ParentCode, ct))
+            throw new DomainException($"Compte parent introuvable : {dto.ParentCode}.");
+
+        var account = new ChartAccount
+        {
+            Code = dto.Code.Trim(),
+            Name = dto.Name.Trim(),
+            AccountClass = accountClass,
+            NormalBalance = normalBalance,
+            IsThirdParty = dto.IsThirdParty,
+            IsSystem = false,
+            ParentCode = dto.ParentCode?.Trim(),
+        };
+
+        DbContext.ChartAccounts.Add(account);
+        await DbContext.SaveChangesAsync(ct);
+        return ToChartAccountDto(account);
+    }
+
+    public async Task<ChartAccountDto> UpdateChartAccountAsync(long id, UpdateChartAccountDto dto, CancellationToken ct = default)
+    {
+        var account = await DbContext.ChartAccounts.FirstOrDefaultAsync(a => a.Id == id, ct)
+            ?? throw new DomainException("Compte introuvable.");
+
+        if (account.IsSystem)
+            throw new DomainException("Les comptes système ne peuvent pas être modifiés.");
+
+        if (dto.ParentCode is not null && !await DbContext.ChartAccounts.AnyAsync(a => a.Code == dto.ParentCode, ct))
+            throw new DomainException($"Compte parent introuvable : {dto.ParentCode}.");
+
+        account.Name = dto.Name.Trim();
+        account.IsThirdParty = dto.IsThirdParty;
+        account.ParentCode = dto.ParentCode?.Trim();
+
+        await DbContext.SaveChangesAsync(ct);
+        return ToChartAccountDto(account);
+    }
+
+    public async Task DeleteChartAccountAsync(long id, CancellationToken ct = default)
+    {
+        var account = await DbContext.ChartAccounts.FirstOrDefaultAsync(a => a.Id == id, ct)
+            ?? throw new DomainException("Compte introuvable.");
+
+        if (account.IsSystem)
+            throw new DomainException("Les comptes système ne peuvent pas être supprimés.");
+
+        if (await DbContext.ChartAccounts.AnyAsync(a => a.ParentCode == account.Code, ct))
+            throw new DomainException("Ce compte a des sous-comptes. Supprimez-les d'abord.");
+
+        if (await DbContext.JournalLines.AnyAsync(l => l.AccountId == id, ct))
+            throw new DomainException("Ce compte est utilisé dans des écritures comptables et ne peut pas être supprimé.");
+
+        DbContext.ChartAccounts.Remove(account);
+        await DbContext.SaveChangesAsync(ct);
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Journal
     // ──────────────────────────────────────────────────────────────
