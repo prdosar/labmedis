@@ -2,6 +2,7 @@ using LabMedis.Application.Dtos.StockMovements;
 using LabMedis.Application.Services;
 using LabMedis.Domain.Common;
 using LabMedis.Domain.Entities;
+using LabMedis.Domain.Enums;
 using LabMedis.Infrastructure.Persistence;
 using LabMedis.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -117,6 +118,100 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         m.Quantity, m.MovementDate,
         m.Reference, m.Notes,
         m.CreatedAt, m.UpdatedAt);
+
+    public async Task PostOpeningInventoryAsync(OpeningInventoryInput input, CancellationToken ct = default)
+    {
+        if (input.Lines.Count == 0)
+            throw new DomainException("L'inventaire doit contenir au moins une ligne.");
+
+        var productIds = input.Lines.Select(l => l.ProductId).Distinct().ToList();
+        var products = await DbContext.Products
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .ToDictionaryAsync(p => p.Id, ct);
+
+        var warehouseIds = input.Lines.Select(l => l.WarehouseId).Distinct().ToList();
+        var warehouses = await DbContext.Warehouses
+            .Where(w => warehouseIds.Contains(w.Id))
+            .ToDictionaryAsync(w => w.Id, ct);
+
+        foreach (var line in input.Lines)
+        {
+            if (!products.ContainsKey(line.ProductId))
+                throw new DomainException($"Produit introuvable (Id={line.ProductId}).");
+            if (!warehouses.ContainsKey(line.WarehouseId))
+                throw new DomainException($"Magasin introuvable (Id={line.WarehouseId}).");
+            if (line.Quantity <= 0)
+                throw new DomainException($"Quantité invalide pour le produit Id={line.ProductId}.");
+        }
+
+        var date = input.Date.Date;
+        var bySupplier = input.Lines.GroupBy(l => products[l.ProductId].SupplierId).ToList();
+
+        for (var i = 0; i < bySupplier.Count; i++)
+        {
+            var group = bySupplier[i];
+            var supplierId = group.Key;
+            var supplier = await DbContext.Suppliers
+                .FirstOrDefaultAsync(s => s.Id == supplierId && !s.IsDeleted, ct)
+                ?? throw new DomainException($"Fournisseur introuvable (Id={supplierId}).");
+
+            var purchaseRef = bySupplier.Count > 1
+                ? $"INV-OUV-{date:yyyyMMdd}-{i + 1}"
+                : $"INV-OUV-{date:yyyyMMdd}";
+
+            if (await DbContext.Purchases.AnyAsync(p => p.Reference == purchaseRef, ct))
+                throw new DomainException($"Un inventaire d'ouverture existe déjà pour cette date ({purchaseRef}). Supprimez-le d'abord.");
+
+            var purchase = new Purchase
+            {
+                Reference = purchaseRef,
+                PurchaseDate = date,
+                ArrivalDate = date,
+                SupplierId = supplierId,
+                PurchaseCurrency = Currency.XOF,
+                TransportMode = "Inventaire d'ouverture",
+                Notes = "Inventaire d'ouverture initial"
+            };
+            purchase.SetExchangeRate(1m);
+            DbContext.Purchases.Add(purchase);
+
+            foreach (var lineInput in group)
+            {
+                var product = products[lineInput.ProductId];
+                var lotNumber = !string.IsNullOrWhiteSpace(lineInput.LotNumber)
+                    ? lineInput.LotNumber.Trim()
+                    : $"OUV-{product.Code}";
+
+                // 1 carton = toute la quantité, PA/carton = PA/unité × quantité → PA/unité recalculé = PA saisi
+                var priceLine = purchase.AddLine(
+                    product,
+                    lotNumber,
+                    quantityCartons: 1,
+                    quantityLostCartons: 0,
+                    unitsPerCarton: lineInput.Quantity,
+                    unitFobPricePerCarton: lineInput.UnitCostPriceXof * lineInput.Quantity,
+                    expirationDate: lineInput.ExpirationDate,
+                    marginRate: 0m);
+
+                priceLine.SetFinalSellingPrice(lineInput.SellingPriceHt > 0 ? lineInput.SellingPriceHt : null);
+
+                DbContext.StockMovements.Add(new StockMovement
+                {
+                    ProductId = lineInput.ProductId,
+                    WarehouseId = lineInput.WarehouseId,
+                    PurchaseLine = priceLine,
+                    MovementType = StockMovementType.Adjustment,
+                    Quantity = lineInput.Quantity,
+                    MovementDate = date,
+                    Reference = purchaseRef,
+                    Notes = "Inventaire d'ouverture"
+                });
+            }
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+        _logger.LogInformation("Inventaire d'ouverture créé : {Count} lignes sur {Date:yyyy-MM-dd}", input.Lines.Count, date);
+    }
 
     private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 }

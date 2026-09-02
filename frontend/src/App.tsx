@@ -22,6 +22,7 @@ import { CustomerCreditNoteCreatePage } from './pages/invoices/CustomerCreditNot
 import { CustomerCreditNoteDetailPage } from './pages/invoices/CustomerCreditNoteDetailPage'
 import { DeliveriesPage } from './pages/deliveries/DeliveriesPage'
 import { StockMovementsPage } from './pages/stock/StockMovementsPage'
+import { OpeningInventoryPage } from './pages/stock/OpeningInventoryPage'
 import { CategoriesPage } from './pages/config/CategoriesPage'
 import { TherapeuticClassesPage } from './pages/config/TherapeuticClassesPage'
 import { ProductFormsPage } from './pages/config/ProductFormsPage'
@@ -107,6 +108,7 @@ export default function App() {
               <Route path="/invoices/suppliers/:id" element={<SupplierInvoiceDetailPage />} />
               <Route path="/deliveries" element={<DeliveriesPage />} />
               <Route path="/stock-movements" element={<StockMovementsPage />} />
+              <Route path="/stock/opening-inventory" element={<OpeningInventoryPage />} />
               <Route path="/config/categories" element={<CategoriesPage />} />
               <Route path="/config/therapeutic-classes" element={<TherapeuticClassesPage />} />
               <Route path="/config/product-forms" element={<ProductFormsPage />} />

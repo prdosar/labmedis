@@ -271,6 +271,18 @@ export const stockMovementsApi = {
       `/stock-movements/by-warehouse/${warehouseId}?page=${page}&size=${size}`,
     ),
   getById: (id: number) => api.get<StockMovementDto>(`/stock-movements/${id}`),
+  postOpeningInventory: (dto: {
+    date: string
+    lines: {
+      productId: number
+      warehouseId: number
+      quantity: number
+      unitCostPriceXof: number
+      sellingPriceHt: number
+      lotNumber: string | null
+      expirationDate: string | null
+    }[]
+  }) => api.post<void>('/stock-movements/opening-inventory', dto),
 }
 
 // ─── Accounting ──────────────────────────────────────────────────────────────

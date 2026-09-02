@@ -27,6 +27,8 @@ import {
   BookUser,
   ClipboardList,
   Building2,
+  BarChart3,
+  PackageSearch,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import logo from '../../assets/logo.png'
@@ -53,6 +55,11 @@ const ordersNav: NavItem[] = [
 ]
 
 const deliveryItem: NavItem = { to: '/deliveries', label: 'Livraisons', icon: <Send size={17} /> }
+
+const stockNav: NavItem[] = [
+  { to: '/stock-movements', label: 'Mouvements de stock', icon: <BarChart3 size={17} /> },
+  { to: '/stock/opening-inventory', label: 'Inventaire d\'ouverture', icon: <PackageSearch size={17} /> },
+]
 
 const configNav: NavItem[] = [
   { to: '/config/categories', label: 'Catégories', icon: <Tag size={16} /> },
@@ -260,6 +267,7 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4 flex flex-col gap-5">
         <NavSection label="Principal" items={mainNav} />
         <NavSection label="Catalogue & Tiers" items={businessNav} />
+        <NavSection label="Stock" items={stockNav} />
         <div>
           <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Commandes</p>
           <div className="flex flex-col gap-0.5">

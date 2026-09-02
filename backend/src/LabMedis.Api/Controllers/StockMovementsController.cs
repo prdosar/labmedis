@@ -38,4 +38,11 @@ public class StockMovementsController : ControllerBase
         var created = await _service.CreateAsync(dto, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
+
+    [HttpPost("opening-inventory")]
+    public async Task<IActionResult> PostOpeningInventory([FromBody] OpeningInventoryInput input, CancellationToken ct)
+    {
+        await _service.PostOpeningInventoryAsync(input, ct);
+        return NoContent();
+    }
 }
