@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Search, X } from 'lucide-react'
-import type { ProductDto, WarehouseDto } from '../../api/types'
 import { productsApi, warehousesApi, stockMovementsApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
@@ -26,8 +25,6 @@ function numVal(s: string): number { return parseFloat(s.replace(',', '.')) || 0
 
 export function OpeningInventoryPage() {
   const { toast } = useToast()
-  const [products, setProducts] = useState<ProductDto[]>([])
-  const [warehouses, setWarehouses] = useState<WarehouseDto[]>([])
   const [lines, setLines] = useState<LineState[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -44,13 +41,11 @@ export function OpeningInventoryPage() {
     ]).then(([prods, whs]) => {
       const wh = whs[0]
       warehouseDefault.current = wh?.id ?? 0
-      setWarehouses(whs)
 
       const sorted = [...prods.items].sort((a, b) =>
         (a.supplierName ?? '').localeCompare(b.supplierName ?? '', 'fr') ||
         a.designation.localeCompare(b.designation, 'fr'),
       )
-      setProducts(sorted)
       setLines(sorted.map(p => ({
         productId: p.id,
         designation: p.designation,
@@ -207,8 +202,7 @@ export function OpeningInventoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map((l, displayIdx) => {
-                // Find original index in lines array for setLine
+              {filtered.map((l) => {
                 const origIdx = lines.findIndex(x => x.productId === l.productId)
                 const hasFill = numVal(l.quantity) > 0
 
