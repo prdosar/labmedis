@@ -80,11 +80,13 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         if (!await DbContext.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId, cancellationToken))
             throw new DomainException($"Magasin introuvable (Id={dto.WarehouseId}).");
 
-        var purchaseLine = await DbContext.PurchaseLines.FirstOrDefaultAsync(l => l.Id == dto.PurchaseLineId, cancellationToken)
-            ?? throw new DomainException($"Ligne d'arrivage introuvable (Id={dto.PurchaseLineId}).");
-
-        if (purchaseLine.ProductId != dto.ProductId)
-            throw new DomainException("La ligne d'arrivage ne correspond pas au produit sélectionné.");
+        if (dto.PurchaseLineId.HasValue)
+        {
+            var purchaseLine = await DbContext.PurchaseLines.FirstOrDefaultAsync(l => l.Id == dto.PurchaseLineId, cancellationToken)
+                ?? throw new DomainException($"Ligne d'arrivage introuvable (Id={dto.PurchaseLineId}).");
+            if (purchaseLine.ProductId != dto.ProductId)
+                throw new DomainException("La ligne d'arrivage ne correspond pas au produit sélectionné.");
+        }
 
         if (dto.Quantity <= 0)
             throw new DomainException("La quantité du mouvement doit être strictement positive.");
@@ -110,7 +112,7 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         m.Id,
         m.ProductId, m.Product?.Code, m.Product?.Designation,
         m.WarehouseId, m.Warehouse?.Name,
-        m.PurchaseLineId, m.PurchaseLine?.LotNumber,
+        m.PurchaseLineId ?? 0, m.PurchaseLine?.LotNumber,
         m.MovementType.ToString(),
         m.Quantity, m.MovementDate,
         m.Reference, m.Notes,

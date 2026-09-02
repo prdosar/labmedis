@@ -28,4 +28,8 @@ public interface ISupplierOrderService
 
     Task<PagedResult<SupplierInvoiceDto>> GetAllInvoicesAsync(int page, int size, string? status, long? supplierId = null, CancellationToken ct = default);
     Task<SupplierInvoiceDto?> GetInvoiceByIdAsync(long invoiceId, CancellationToken ct = default);
+
+    Task<PagedResult<SupplierCreditNoteDto>> GetAllCreditNotesAsync(int page, int size, string? status, long? supplierId = null, CancellationToken ct = default);
+    Task<IReadOnlyList<SupplierCreditNoteDto>> GetCreditNotesByOrderAsync(long orderId, CancellationToken ct = default);
+    Task<SupplierCreditNoteDto> UpdateCreditNoteStatusAsync(long creditNoteId, UpdateCreditNoteStatusDto dto, CancellationToken ct = default);
 }

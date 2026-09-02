@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Paperclip, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Plus, Paperclip, ExternalLink, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
 import { supplierOrdersApi, type PaymentFormData } from '../../api/endpoints'
-import type { SupplierInvoiceDto, SupplierInvoicePaymentDto } from '../../api/types'
+import type { SupplierCreditNoteDto, SupplierInvoiceDto, SupplierInvoicePaymentDto } from '../../api/types'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Badge } from '../../components/ui/Badge'
@@ -52,12 +52,17 @@ export function SupplierInvoiceDetailPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [creditNotes, setCreditNotes] = useState<SupplierCreditNoteDto[]>([])
 
   function load() {
     if (!id) return
     setLoading(true)
     supplierOrdersApi.getInvoiceById(Number(id))
-      .then(setInvoice)
+      .then(inv => {
+        setInvoice(inv)
+        return supplierOrdersApi.getCreditNotesByOrder(inv.supplierOrderId)
+      })
+      .then(setCreditNotes)
       .catch(() => toast('Facture introuvable.', 'error'))
       .finally(() => setLoading(false))
   }
@@ -68,6 +73,16 @@ export function SupplierInvoiceDetailPage() {
     setForm({ amount: invoice ? String(Math.round(invoice.balanceDue * 100) / 100) : '', paymentDate: today(), paymentMethod: '', reference: '', notes: '', file: null })
     setFormError(null)
     setPayOpen(true)
+  }
+
+  async function handleAvoirStatus(creditNoteId: number, status: string) {
+    try {
+      const updated = await supplierOrdersApi.updateCreditNoteStatus(creditNoteId, status)
+      setCreditNotes(prev => prev.map(cn => cn.id === updated.id ? updated : cn))
+      toast('Statut mis à jour.')
+    } catch {
+      toast('Erreur lors de la mise à jour du statut.', 'error')
+    }
   }
 
   async function handlePay() {
@@ -224,6 +239,66 @@ export function SupplierInvoiceDetailPage() {
           </table>
         )}
       </div>
+
+      {/* Credit notes (avoirs fournisseurs) */}
+      {creditNotes.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-amber-100 flex items-center gap-2">
+            <AlertTriangle size={15} className="text-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-800">Factures avoir liées ({creditNotes.length})</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-amber-50 text-xs text-amber-700 uppercase tracking-wide">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Référence</th>
+                <th className="px-4 py-2.5 text-left">Date</th>
+                <th className="px-4 py-2.5 text-left">Arrivage</th>
+                <th className="px-4 py-2.5 text-right">Boîtes perdues</th>
+                <th className="px-4 py-2.5 text-right">Montant</th>
+                <th className="px-4 py-2.5 text-left">Statut</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-50">
+              {creditNotes.map(cn => (
+                <tr key={cn.id} className="hover:bg-amber-50/40">
+                  <td className="px-4 py-2.5 font-medium text-gray-800">{cn.reference}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{fmtDate(String(cn.creditNoteDate))}</td>
+                  <td className="px-4 py-2.5 text-gray-600">{cn.purchaseReference ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-700">{cn.lostBoxesCount}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-amber-700">{fmtXof(cn.amountXof)}</td>
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={cn.status}
+                      onChange={e => handleAvoirStatus(cn.id, e.target.value)}
+                      className="text-xs rounded-lg border border-gray-200 px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    >
+                      <option value="EnAttente">En attente</option>
+                      <option value="AvoirReçu">Avoir reçu</option>
+                      <option value="Remboursé">Remboursé</option>
+                      <option value="Remplacé">Remplacé</option>
+                      <option value="Annulé">Annulé</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {creditNotes.some(cn => cn.status === 'EnAttente' || cn.status === 'AvoirReçu') && (
+            <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 flex items-center gap-2 text-xs text-amber-700">
+              <RefreshCw size={12} />
+              <span>
+                Total en attente : <strong>{fmtXof(creditNotes.filter(cn => cn.status === 'EnAttente' || cn.status === 'AvoirReçu').reduce((s, cn) => s + cn.amountXof, 0))}</strong>
+              </span>
+            </div>
+          )}
+          {creditNotes.every(cn => cn.status === 'Remboursé' || cn.status === 'Remplacé' || cn.status === 'Annulé') && (
+            <div className="px-5 py-3 bg-green-50 border-t border-green-100 flex items-center gap-2 text-xs text-green-700">
+              <CheckCircle size={12} />
+              <span>Tous les avoirs ont été traités.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Payment modal */}
       <Modal isOpen={payOpen} onClose={() => setPayOpen(false)} title="Enregistrer un règlement" size="sm">

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Package, AlertTriangle, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Package, AlertTriangle, TrendingUp, ChevronDown, ChevronUp, Plus, X, Camera } from 'lucide-react'
 import type { SupplierOrderDto } from '../../api/types'
 import { supplierOrdersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
@@ -9,50 +9,53 @@ import { Button } from '../../components/ui/Button'
 import { fmtXof, fmtNum } from '../../utils/format'
 
 const EUR_XOF = 655.957
-
 const TRANSPORT_MODES = ['Maritime', 'Aérien', 'Terrestre']
 
-// Reception grid: Produit | Cmd | Cartons | Perdus | U/carton | FOB/carton | Bonnes u. | Lot | Expiration | PA unit.
-const RECV_GRID = '1.5fr 3rem 4rem 4rem 4.5rem 6rem 5.5rem 9rem 8rem 6rem'
+// Reception grid — 7 colonnes, produit 1fr absorbe l'espace résiduel (pas de colonne vide à droite)
+const RECV_GRID = 'minmax(160px,1fr) 140px 130px 80px 75px 85px 52px'
 
-// Pricing grid: Produit | PA FOB/u | PR calculé | Marge % | PV calculé | PV fixé | Marge réelle
-const PRICE_GRID = '1.5fr 5.5rem 6rem 4.5rem 6.5rem 6.5rem 5rem'
+// Pricing grid: Produit | U/ctn | FOB/ctn | PA/u | PR calculé | Marge % | PV calculé | PV fixé | Marge réelle
+const PRICE_GRID = '1.5fr 4rem 5.5rem 5.5rem 6rem 4.5rem 6.5rem 6.5rem 5rem'
 
-// Pricing charge definitions: chargeType, label, account, default rate %
 const CHARGE_DEFS = [
-  { key: 'commission', label: 'Commission',     account: '6342', defaultRate: '25' },
-  { key: 'freight',    label: 'Fret',           account: '6241', defaultRate: '3'  },
-  { key: 'transit',    label: 'Transit',        account: '6248', defaultRate: '9'  },
-  { key: 'transfer',   label: 'Frais transfert', account: '6288', defaultRate: '7'  },
+  { key: 'commission', label: 'Commission',      account: '6342' },
+  { key: 'freight',    label: 'Fret',            account: '6241' },
+  { key: 'transit',    label: 'Transit',         account: '6248' },
+  { key: 'transfer',   label: 'Frais transfert', account: '6288' },
 ] as const
 
 type ChargeKey = typeof CHARGE_DEFS[number]['key']
 
 interface GoodsLineState {
+  lineKey: string
   orderLineId: number
   productCode: string
   productDesignation: string
   packagingName: string | null
   dosageName: string | null
-  orderedQuantity: number
+  orderedQuantity: number       // en cartons (depuis la commande)
   orderUnit: string
-  unitsPerCarton: string
-  unitFobPricePerCarton: string
+  unitsPerCarton: string        // connu depuis le conditionnement produit
+  unitFobPricePerCarton: string // FOB par carton (saisie dans la grille prix)
   lotNumber: string
-  quantityCartons: string
-  quantityLostCartons: string
+  quantityCartons: string       // cartons physiques reçus (saisie)
+  quantityLostBoxes: string     // boîtes perdues (peut être fraction d'un carton)
   expirationDate: string
   marginRate: string
   fixedSellingPriceHt: string
 }
 
-function goodUnits(line: GoodsLineState): number {
-  const cartons = Number(line.quantityCartons) || 0
-  const lost = Number(line.quantityLostCartons) || 0
-  const upc = Number(line.unitsPerCarton) || 1
-  return Math.max(0, (cartons - lost)) * upc
+// Total boîtes = cartons × u/ctn (auto-calculé)
+function totalBoxes(line: GoodsLineState): number {
+  return (Number(line.quantityCartons) || 0) * Math.max(1, Number(line.unitsPerCarton) || 1)
 }
 
+// Bonnes boîtes entrant en stock
+function goodBoxes(line: GoodsLineState): number {
+  return Math.max(0, totalBoxes(line) - (Number(line.quantityLostBoxes) || 0))
+}
+
+// PA par boîte = (FOB/carton × taux) / U/ctn
 function paUnitXof(line: GoodsLineState, exchangeRate: string): number {
   const fob = Number(line.unitFobPricePerCarton) || 0
   const upc = Math.max(1, Number(line.unitsPerCarton) || 1)
@@ -62,11 +65,11 @@ function paUnitXof(line: GoodsLineState, exchangeRate: string): number {
 }
 
 interface PricingCalc {
-  paUnit: number   // FOB per unit, loss-adjusted
-  prUnit: number   // PA × coefficients (landed cost)
-  pvCalc: number   // prUnit × (1 + margin)
-  pvFinal: number  // fixed if set, else pvCalc
-  margeReelle: number // %
+  paUnit: number
+  prUnit: number
+  pvCalc: number
+  pvFinal: number
+  margeReelle: number
 }
 
 function calcLinePricing(
@@ -75,26 +78,21 @@ function calcLinePricing(
   rates: Record<ChargeKey, string>,
 ): PricingCalc {
   const pa = paUnitXof(line, exchangeRate)
-  const cartons = Number(line.quantityCartons) || 0
-  const lost = Number(line.quantityLostCartons) || 0
-  const goodCartons = Math.max(0, cartons - lost)
-  const lossRatio = goodCartons > 0 && cartons > 0 ? cartons / goodCartons : 1
+  // Les boîtes perdues font l'objet d'un avoir fournisseur — elles n'affectent pas le PA ni le PR.
+  const comm   = (Number(rates.commission) || 0) / 100
+  const frt    = (Number(rates.freight)    || 0) / 100
+  const trs    = (Number(rates.transit)    || 0) / 100
+  const trf    = (Number(rates.transfer)   || 0) / 100
+  const margin = (Number(line.marginRate)  || 0) / 100
 
-  const comm = (Number(rates.commission) || 0) / 100
-  const frt  = (Number(rates.freight)    || 0) / 100
-  const trs  = (Number(rates.transit)    || 0) / 100
-  const trf  = (Number(rates.transfer)   || 0) / 100
-  const margin = (Number(line.marginRate) || 0) / 100
-
-  const paAdj = pa * lossRatio
   const multiplier = (1 + comm) * (1 + frt) * (1 + trs) * (1 + trf)
-  const prUnit = paAdj * multiplier
+  const prUnit = pa * multiplier
   const pvCalc = prUnit * (1 + margin)
   const pvFixed = Number(line.fixedSellingPriceHt) || 0
   const pvFinal = pvFixed > 0 ? pvFixed : pvCalc
   const margeReelle = prUnit > 0 ? ((pvFinal - prUnit) / prUnit) * 100 : 0
 
-  return { paUnit: paAdj, prUnit, pvCalc, pvFinal, margeReelle }
+  return { paUnit: pa, prUnit, pvCalc, pvFinal, margeReelle }
 }
 
 export function ReceiveGoodsPage() {
@@ -108,21 +106,28 @@ export function ReceiveGoodsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [pricingOpen, setPricingOpen] = useState(true)
 
-  // Arrivage-level fields
   const [arrivalDate, setArrivalDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [transportMode, setTransportMode] = useState('Maritime')
   const [exchangeRateToXof, setExchangeRateToXof] = useState(String(EUR_XOF))
   const [notes, setNotes] = useState('')
 
-  // Coefficient rates (as % strings, e.g. "25")
   const [rates, setRates] = useState<Record<ChargeKey, string>>({
-    commission: '25',
-    freight:    '3',
-    transit:    '9',
-    transfer:   '7',
+    commission: '25', freight: '3', transit: '9', transfer: '7',
   })
 
   const [lines, setLines] = useState<GoodsLineState[]>([])
+  const [linePhotos, setLinePhotos] = useState<Record<string, File[]>>({})
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<Record<string, string[]>>({})
+  const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  useEffect(() => {
+    const urlMap: Record<string, string[]> = {}
+    for (const [key, files] of Object.entries(linePhotos)) {
+      urlMap[key] = files.map(f => URL.createObjectURL(f))
+    }
+    setPhotoPreviewUrls(urlMap)
+    return () => { Object.values(urlMap).flat().forEach(u => URL.revokeObjectURL(u)) }
+  }, [linePhotos])
 
   useEffect(() => {
     if (!id) return
@@ -132,7 +137,8 @@ export function ReceiveGoodsPage() {
         if (o.currency === 'EUR') setExchangeRateToXof(String(EUR_XOF))
         else if (o.currency === 'XOF') setExchangeRateToXof('1')
         setLines(
-          o.lines.map(l => ({
+          o.lines.map((l, idx) => ({
+            lineKey: `${l.id}-${idx}`,
             orderLineId: l.id,
             productCode: l.productCode,
             productDesignation: l.productDesignation,
@@ -148,7 +154,7 @@ export function ReceiveGoodsPage() {
             unitFobPricePerCarton: l.unitFobPrice != null ? String(l.unitFobPrice) : '',
             lotNumber: '',
             quantityCartons: String(l.quantity),
-            quantityLostCartons: '0',
+            quantityLostBoxes: '0',
             expirationDate: '',
             marginRate: '10',
             fixedSellingPriceHt: '',
@@ -159,12 +165,59 @@ export function ReceiveGoodsPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  function updateLine(idx: number, patch: Partial<GoodsLineState>) {
-    setLines(prev => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
+  function updateLine(lineKey: string, patch: Partial<GoodsLineState>) {
+    setLines(prev => prev.map(l => l.lineKey === lineKey ? { ...l, ...patch } : l))
   }
 
   function updateRate(key: ChargeKey, val: string) {
     setRates(prev => ({ ...prev, [key]: val }))
+  }
+
+  function addLotLine(lineKey: string) {
+    setLines(prev => {
+      const template = prev.find(l => l.lineKey === lineKey)
+      if (!template) return prev
+      const newLine: GoodsLineState = {
+        ...template,
+        lineKey: `${template.orderLineId}-${Date.now()}`,
+        lotNumber: '',
+        quantityCartons: '',
+        quantityLostBoxes: '0',
+        expirationDate: '',
+      }
+      let lastIdx = -1
+      prev.forEach((l, i) => { if (l.orderLineId === template.orderLineId) lastIdx = i })
+      const next = [...prev]
+      next.splice(lastIdx + 1, 0, newLine)
+      return next
+    })
+  }
+
+  function removeLotLine(lineKey: string) {
+    setLines(prev => {
+      const line = prev.find(l => l.lineKey === lineKey)
+      if (!line) return prev
+      if (prev.filter(l => l.orderLineId === line.orderLineId).length <= 1) return prev
+      return prev.filter(l => l.lineKey !== lineKey)
+    })
+    setLinePhotos(prev => { const n = { ...prev }; delete n[lineKey]; return n })
+  }
+
+  function handlePhotoSelect(lineKey: string, files: FileList | null) {
+    if (!files || files.length === 0) return
+    setLinePhotos(prev => ({
+      ...prev,
+      [lineKey]: [...(prev[lineKey] ?? []), ...Array.from(files)],
+    }))
+    const input = photoInputRefs.current[lineKey]
+    if (input) input.value = ''
+  }
+
+  function removePhoto(lineKey: string, fileIdx: number) {
+    setLinePhotos(prev => ({
+      ...prev,
+      [lineKey]: (prev[lineKey] ?? []).filter((_, i) => i !== fileIdx),
+    }))
   }
 
   async function handleSave() {
@@ -174,10 +227,9 @@ export function ReceiveGoodsPage() {
     if (invalidQty) { setFormError(`Quantité invalide : ${invalidQty.productDesignation}`); return }
     const missingFob = lines.find(l => !l.unitFobPricePerCarton || Number(l.unitFobPricePerCarton) <= 0)
     if (missingFob) { setFormError(`Prix FOB manquant : ${missingFob.productDesignation}`); return }
-    const badLost = lines.find(l => Number(l.quantityLostCartons) > Number(l.quantityCartons))
-    if (badLost) { setFormError(`Cartons perdus > cartons reçus : ${badLost.productDesignation}`); return }
+    const badLost = lines.find(l => Number(l.quantityLostBoxes) > totalBoxes(l))
+    if (badLost) { setFormError(`Boîtes perdues > boîtes reçues : ${badLost.productDesignation}`); return }
 
-    // Block save if any fixed price is below cost price
     const lossLine = lines.find(l => {
       const p = calcLinePricing(l, exchangeRateToXof, rates)
       return p.prUnit > 0 && Number(l.fixedSellingPriceHt) > 0 && Number(l.fixedSellingPriceHt) < p.prUnit
@@ -187,8 +239,7 @@ export function ReceiveGoodsPage() {
       setFormError(
         `Prix de vente inférieur au coût — ${lossLine.productDesignation} : ` +
         `PV fixé ${Number(lossLine.fixedSellingPriceHt).toLocaleString('fr-FR')} XOF < ` +
-        `PR ${Math.round(p.prUnit).toLocaleString('fr-FR')} XOF. ` +
-        `Videz le champ "PV fixé" pour utiliser le prix calculé depuis la marge, ou corrigez le prix.`
+        `PR ${Math.round(p.prUnit).toLocaleString('fr-FR')} XOF.`
       )
       return
     }
@@ -205,18 +256,37 @@ export function ReceiveGoodsPage() {
         freightRate:    (Number(rates.freight)    || 0) / 100,
         transitRate:    (Number(rates.transit)    || 0) / 100,
         transferRate:   (Number(rates.transfer)   || 0) / 100,
-        lines: lines.map(l => ({
-          orderLineId: l.orderLineId,
-          lotNumber: l.lotNumber.trim(),
-          quantityCartons: Number(l.quantityCartons),
-          quantityLostCartons: Number(l.quantityLostCartons) || 0,
-          unitsPerCarton: Math.max(1, Number(l.unitsPerCarton) || 1),
-          unitFobPricePerCarton: Number(l.unitFobPricePerCarton),
-          expirationDate: l.expirationDate || null,
-          marginRate: (Number(l.marginRate) || 10) / 100,
-          fixedSellingPriceHt: Number(l.fixedSellingPriceHt) > 0 ? Number(l.fixedSellingPriceHt) : null,
-        })),
+        lines: lines.map(l => {
+          const upc = Math.max(1, Number(l.unitsPerCarton) || 1)
+          const boxes = (Number(l.quantityCartons) || 0) * upc
+          return {
+            orderLineId: l.orderLineId,
+            lotNumber: l.lotNumber.trim(),
+            quantityCartons: boxes,                                             // envoyé en boîtes avec upc=1
+            quantityLostCartons: Number(l.quantityLostBoxes) || 0,
+            unitsPerCarton: 1,
+            unitFobPricePerCarton: (Number(l.unitFobPricePerCarton) || 0) / upc, // converti en FOB/boîte
+            expirationDate: l.expirationDate || null,
+            marginRate: (Number(l.marginRate) || 10) / 100,
+            fixedSellingPriceHt: Number(l.fixedSellingPriceHt) > 0 ? Number(l.fixedSellingPriceHt) : null,
+          }
+        }),
       })
+
+      const photoEntries = Object.entries(linePhotos).filter(([, f]) => f.length > 0)
+      if (photoEntries.length > 0) {
+        try {
+          await Promise.all(
+            photoEntries.flatMap(([, files]) =>
+              files.map(file => supplierOrdersApi.uploadDocument(Number(id), file, 'PhotoPerte'))
+            )
+          )
+        } catch {
+          toast("Arrivage enregistré. Certaines photos n'ont pas pu être uploadées.", 'error')
+          navigate(`/orders/suppliers/${id}/receptions`)
+          return
+        }
+      }
       toast('Arrivage enregistré — stock, charges et prix mis à jour.', 'success')
       navigate(`/orders/suppliers/${id}/receptions`)
     } catch (e) {
@@ -229,7 +299,7 @@ export function ReceiveGoodsPage() {
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Chargement…</div>
   if (!order) return null
 
-  // ── Summary calculations ──────────────────────────────────────────────────────
+  // ── Summary ────────────────────────────────────────────────────────────────
   const totalFobXof = lines.reduce((acc, l) => {
     const fob = Number(l.unitFobPricePerCarton) || 0
     const rate = Number(exchangeRateToXof) || 0
@@ -237,10 +307,15 @@ export function ReceiveGoodsPage() {
     return acc + fob * rate * cartons
   }, 0)
 
-  const totalGoodUnits = lines.reduce((acc, l) => acc + goodUnits(l), 0)
-  const totalLostCartons = lines.reduce((acc, l) => acc + (Number(l.quantityLostCartons) || 0), 0)
+  const sumGoodBoxes = lines.reduce((acc, l) => acc + goodBoxes(l), 0)
+  const sumLostBoxes = lines.reduce((acc, l) => acc + (Number(l.quantityLostBoxes) || 0), 0)
 
-  // Cascading charge bases and amounts
+  // Avoir fournisseur = FOB XOF des boîtes perdues (à réclamer en remboursement ou remplacement)
+  const avoirFournisseurXof = lines.reduce((acc, l) => {
+    const fobPerBox = paUnitXof(l, exchangeRateToXof)
+    return acc + fobPerBox * (Number(l.quantityLostBoxes) || 0)
+  }, 0)
+
   const commBase = totalFobXof
   const commAmt  = commBase * ((Number(rates.commission) || 0) / 100)
   const frtBase  = commBase + commAmt
@@ -250,21 +325,17 @@ export function ReceiveGoodsPage() {
   const trfBase  = trsBase  + trsAmt
   const trfAmt   = trfBase  * ((Number(rates.transfer)   || 0) / 100)
 
-  const chargeBases: Record<ChargeKey, number> = {
-    commission: commBase,
-    freight:    frtBase,
-    transit:    trsBase,
-    transfer:   trfBase,
-  }
-  const chargeAmounts: Record<ChargeKey, number> = {
-    commission: commAmt,
-    freight:    frtAmt,
-    transit:    trsAmt,
-    transfer:   trfAmt,
-  }
+  const chargeBases: Record<ChargeKey, number>  = { commission: commBase, freight: frtBase, transit: trsBase, transfer: trfBase }
+  const chargeAmounts: Record<ChargeKey, number> = { commission: commAmt,  freight: frtAmt,  transit: trsAmt,  transfer: trfAmt  }
   const totalCharges = commAmt + frtAmt + trsAmt + trfAmt
   const prTotal = totalFobXof + totalCharges
-  const prMoyen = totalGoodUnits > 0 ? prTotal / totalGoodUnits : 0
+  // PR moyen pondéré par les bonnes boîtes — pas affecté par les pertes (avoir fournisseur séparé)
+  const prMoyen = sumGoodBoxes > 0
+    ? lines.reduce((acc, l) => {
+        const p = calcLinePricing(l, exchangeRateToXof, rates)
+        return acc + p.prUnit * goodBoxes(l)
+      }, 0) / sumGoodBoxes
+    : 0
 
   return (
     <div className="flex flex-col gap-5">
@@ -288,10 +359,9 @@ export function ReceiveGoodsPage() {
       )}
 
       <div className="flex gap-5 items-start">
-        {/* Left */}
         <div className="w-3/4 min-w-0 flex flex-col gap-5">
 
-          {/* Arrivage parameters */}
+          {/* Paramètres arrivage */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-sm font-semibold text-gray-700 mb-4">Paramètres de l'arrivage</p>
             <div className="grid grid-cols-4 gap-4">
@@ -316,98 +386,185 @@ export function ReceiveGoodsPage() {
             </div>
           </div>
 
-          {/* Reception lines */}
+          {/* Lignes de réception */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100">
               <p className="text-sm font-semibold text-gray-700">Lignes de réception</p>
-              <p className="text-xs text-gray-400 mt-0.5">Cartons reçus, perdus, unités/carton, prix FOB et N° lot</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Saisir les cartons reçus — les boîtes sont calculées automatiquement (cartons × U/ctn).
+                Cliquez <strong>+</strong> pour ajouter un lot différent sur le même produit.
+              </p>
             </div>
 
             <div className="overflow-x-auto">
-            <div style={{ minWidth: '1100px' }}>
+            <div style={{ minWidth: '780px' }}>
+
+            {/* En-têtes */}
             <div
               className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
               style={{ gridTemplateColumns: RECV_GRID }}
             >
               <span className="sticky left-0 bg-gray-50 z-10 pl-4 pr-2">Produit</span>
-              <span className="text-right">Cmd</span>
-              <span className="text-right">Cartons</span>
-              <span className="text-right text-red-500">Perdus</span>
-              <span className="text-right">U/carton</span>
-              <span className="text-right">FOB/carton</span>
-              <span className="text-right text-green-600">Bonnes u.</span>
               <span>N° Lot *</span>
               <span>Expiration</span>
-              <span className="text-right">PA unit.</span>
+              <span className="text-right">Cartons</span>
+              <span className="text-right text-brand-600">Boîtes</span>
+              <span className="text-right text-red-500 leading-tight">
+                Perdues<br /><span className="normal-case font-normal text-red-400">(btes)</span>
+              </span>
+              <span />
             </div>
 
-            <div className="divide-y divide-gray-50">
+            {/* Lignes */}
+            <div>
               {lines.map((line, idx) => {
-                const goodU = goodUnits(line)
-                const hasLoss = Number(line.quantityLostCartons) > 0
+                const isFirstOfGroup = idx === 0 || lines[idx - 1].orderLineId !== line.orderLineId
                 const label = `${line.productDesignation}${line.packagingName ? ` (${line.packagingName})` : ''}`
+                const hasSiblings = lines.filter(l => l.orderLineId === line.orderLineId).length > 1
+                const photos = linePhotos[line.lineKey] ?? []
+                const previews = photoPreviewUrls[line.lineKey] ?? []
+                const boxes = totalBoxes(line)
+                const lost = Number(line.quantityLostBoxes) || 0
+                const hasLoss = lost > 0
+                const upc = Math.max(1, Number(line.unitsPerCarton) || 1)
+
                 return (
-                  <div
-                    key={line.orderLineId}
-                    className={`py-2.5 grid gap-1.5 items-center ${hasLoss ? 'bg-red-50/30' : ''}`}
-                    style={{ gridTemplateColumns: RECV_GRID }}
-                  >
-                    <div className={`min-w-0 sticky left-0 z-10 pl-4 pr-2 ${hasLoss ? 'bg-red-50' : 'bg-white'}`}>
-                      <div
-                        className="text-sm text-gray-900 truncate"
-                        title={label}
-                      >
-                        {label}
+                  <div key={line.lineKey} className={`border-b border-gray-50 ${hasLoss ? 'bg-red-50/20' : ''}`}>
+                    <div
+                      className="py-2.5 grid gap-1.5 items-center"
+                      style={{ gridTemplateColumns: RECV_GRID }}
+                    >
+                      {/* Produit */}
+                      <div className={`min-w-0 sticky left-0 z-10 pl-4 pr-2 ${hasLoss ? 'bg-red-50/60' : 'bg-white'}`}>
+                        {isFirstOfGroup ? (
+                          <>
+                            <div className="text-sm text-gray-900 truncate" title={label}>{label}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              <span className="font-mono">{line.productCode}</span>
+                              <span className="ml-2 text-gray-300">·</span>
+                              <span className="ml-2">Cmd : {line.orderedQuantity} {line.orderUnit}</span>
+                              <span className="ml-2 text-gray-300">·</span>
+                              <span className="ml-2">{upc} bte/ctn</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-gray-400 pl-3 flex items-center gap-1 truncate" title={label}>
+                            <span className="text-gray-300 shrink-0">└</span>
+                            <span className="truncate">{label}</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
+
+                      {/* N° Lot */}
+                      <input
+                        value={line.lotNumber}
+                        onChange={e => updateLine(line.lineKey, { lotNumber: e.target.value })}
+                        placeholder="LOT-2026-…"
+                        className={`${inputCls} px-2 py-1`}
+                      />
+
+                      {/* Expiration */}
+                      <input
+                        type="date" value={line.expirationDate}
+                        onChange={e => updateLine(line.lineKey, { expirationDate: e.target.value })}
+                        className={`${inputCls} px-2 py-1`}
+                      />
+
+                      {/* Cartons reçus (input) */}
+                      <input
+                        type="number" min={0} value={line.quantityCartons}
+                        onChange={e => updateLine(line.lineKey, { quantityCartons: e.target.value })}
+                        placeholder="0"
+                        className={`${inputCls} text-right px-2 py-1`}
+                      />
+
+                      {/* Boîtes totales (auto-calculé) */}
+                      <div className="text-right pr-1">
+                        {boxes > 0 ? (
+                          <span className="text-sm font-semibold text-brand-700">{fmtNum(boxes)}</span>
+                        ) : (
+                          <span className="text-sm text-gray-300">—</span>
+                        )}
+                      </div>
+
+                      {/* Boîtes perdues (input) */}
+                      <input
+                        type="number" min={0} value={line.quantityLostBoxes}
+                        onChange={e => updateLine(line.lineKey, { quantityLostBoxes: e.target.value })}
+                        placeholder="0"
+                        className={`${inputCls} text-right px-2 py-1 ${hasLoss ? 'border-red-300 bg-red-50 text-red-700' : ''}`}
+                      />
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-center gap-0.5">
+                        <button
+                          onClick={() => photoInputRefs.current[line.lineKey]?.click()}
+                          className={`p-0.5 rounded transition-colors ${photos.length > 0 ? 'text-amber-500 hover:text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
+                          title="Ajouter photo(s) des boîtes perdues"
+                        >
+                          <Camera size={13} />
+                        </button>
+                        {hasSiblings && (
+                          <button
+                            onClick={() => removeLotLine(line.lineKey)}
+                            className="p-0.5 rounded text-gray-300 hover:text-red-400 transition-colors"
+                            title="Supprimer ce lot"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => addLotLine(line.lineKey)}
+                          className="p-0.5 rounded text-gray-400 hover:text-brand-600 transition-colors"
+                          title="Ajouter un lot supplémentaire"
+                        >
+                          <Plus size={13} />
+                        </button>
+                        <input
+                          type="file" accept="image/*" multiple className="hidden"
+                          ref={el => { photoInputRefs.current[line.lineKey] = el }}
+                          onChange={e => handlePhotoSelect(line.lineKey, e.target.files)}
+                        />
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500 text-right">{line.orderedQuantity}</div>
-                    <input
-                      type="number" min={0} value={line.quantityCartons}
-                      onChange={e => updateLine(idx, { quantityCartons: e.target.value })}
-                      className={`${inputCls} text-right px-2 py-1`}
-                    />
-                    <input
-                      type="number" min={0} value={line.quantityLostCartons}
-                      onChange={e => updateLine(idx, { quantityLostCartons: e.target.value })}
-                      className={`${inputCls} text-right px-2 py-1 ${hasLoss ? 'border-red-300 bg-red-50' : ''}`}
-                      placeholder="0"
-                    />
-                    <input
-                      type="number" min={1} value={line.unitsPerCarton}
-                      onChange={e => updateLine(idx, { unitsPerCarton: e.target.value })}
-                      className={`${inputCls} text-right px-2 py-1`}
-                    />
-                    <input
-                      type="number" step="0.0001" min={0} value={line.unitFobPricePerCarton}
-                      onChange={e => updateLine(idx, { unitFobPricePerCarton: e.target.value })}
-                      placeholder="0.00" className={`${inputCls} text-right px-2 py-1`}
-                    />
-                    <div className={`text-right text-xs font-semibold ${goodU > 0 ? 'text-green-700' : 'text-gray-400'}`}>
-                      {goodU > 0 ? fmtNum(goodU) : '—'}
-                    </div>
-                    <input
-                      value={line.lotNumber}
-                      onChange={e => updateLine(idx, { lotNumber: e.target.value })}
-                      placeholder="LOT-2026-…" className={`${inputCls} px-2 py-1`}
-                    />
-                    <input
-                      type="date" value={line.expirationDate}
-                      onChange={e => updateLine(idx, { expirationDate: e.target.value })}
-                      className={`${inputCls} px-2 py-1`}
-                    />
-                    <div className="text-right text-xs font-mono text-gray-600">
-                      {(() => { const pa = paUnitXof(line, exchangeRateToXof); return pa > 0 ? fmtNum(pa, 0) : <span className="text-gray-300">—</span> })()}
-                    </div>
+
+                    {/* Galerie photos */}
+                    {previews.length > 0 && (
+                      <div className="pl-5 pb-2.5 flex flex-wrap gap-2">
+                        {previews.map((url, i) => (
+                          <div key={i} className="relative group shrink-0">
+                            <img
+                              src={url} alt={`Photo ${i + 1}`}
+                              className="h-16 w-16 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                              onClick={() => window.open(url, '_blank')}
+                            />
+                            <button
+                              onClick={() => removePhoto(line.lineKey, i)}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              title="Supprimer cette photo"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => photoInputRefs.current[line.lineKey]?.click()}
+                          className="h-16 w-16 shrink-0 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 hover:border-amber-300 hover:text-amber-400 transition-colors"
+                        >
+                          <Camera size={16} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
-            </div>{/* minWidth */}
-            </div>{/* overflow-x-auto */}
+
+            </div>
+            </div>
           </div>
 
-          {/* Pricing structure */}
+          {/* Grille de prix */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <button
               className="w-full px-5 py-3 border-b border-gray-100 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -423,10 +580,10 @@ export function ReceiveGoodsPage() {
 
             {pricingOpen && (
               <>
-                {/* Arrivage-level rate inputs */}
+                {/* Charges arrivage */}
                 <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/30">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                    Charges de l'arrivage — saisir le taux % ou le montant XOF (C: 401 Fournisseurs)
+                    Charges de l'arrivage — taux % ou montant XOF (C: 401 Fournisseurs)
                   </p>
                   <div className="grid grid-cols-4 gap-4">
                     {CHARGE_DEFS.map(def => {
@@ -439,7 +596,6 @@ export function ReceiveGoodsPage() {
                             <label className="text-xs font-semibold text-gray-600">{def.label}</label>
                             <span className="text-xs font-mono text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">{def.account}</span>
                           </div>
-                          {/* Taux % */}
                           <div className="relative flex items-center">
                             <input
                               type="number" step="0.01" min={0} max={100}
@@ -449,15 +605,14 @@ export function ReceiveGoodsPage() {
                             />
                             <span className="absolute right-2 text-xs text-gray-500 pointer-events-none">%</span>
                           </div>
-                          {/* Montant XOF */}
                           <input
                             type="number" step="1" min={0}
                             value={Math.round(amt) || ''}
                             placeholder="Montant XOF"
                             disabled={base <= 0}
                             onChange={e => {
-                              const enteredAmt = Number(e.target.value) || 0
-                              if (base > 0) updateRate(key, String(((enteredAmt / base) * 100).toFixed(4)))
+                              const v = Number(e.target.value) || 0
+                              if (base > 0) updateRate(key, String(((v / base) * 100).toFixed(4)))
                             }}
                             className={`${inputCls} py-1.5 text-right text-sm font-mono ${base <= 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
                           />
@@ -469,19 +624,21 @@ export function ReceiveGoodsPage() {
                     <div className="mt-3 flex gap-6 text-xs">
                       <span className="text-gray-500">Total charges : <strong className="text-gray-800">{fmtXof(totalCharges)}</strong></span>
                       <span className="text-gray-500">PR total : <strong className="text-brand-700">{fmtXof(prTotal)}</strong></span>
-                      <span className="text-gray-500">PR moyen/u : <strong className="text-brand-700">{fmtXof(prMoyen)}</strong></span>
+                      <span className="text-gray-500">PR moyen/boîte : <strong className="text-brand-700">{fmtXof(prMoyen)}</strong></span>
                     </div>
                   )}
                 </div>
 
-                {/* Per-line pricing */}
+                {/* Prix par ligne */}
                 <div className="overflow-x-auto">
-                <div style={{ minWidth: '820px' }}>
+                <div style={{ minWidth: '940px' }}>
                 <div
                   className="py-2 border-b border-gray-100 grid gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50"
                   style={{ gridTemplateColumns: PRICE_GRID }}
                 >
                   <span className="sticky left-0 bg-gray-50 z-10 pl-4 pr-2">Produit</span>
+                  <span className="text-right">U/ctn</span>
+                  <span className="text-right">FOB/ctn</span>
                   <span className="text-right">PA/u (XOF)</span>
                   <span className="text-right">PR calculé</span>
                   <span className="text-right">Marge %</span>
@@ -496,21 +653,43 @@ export function ReceiveGoodsPage() {
                     const label = `${line.productDesignation}${line.packagingName ? ` (${line.packagingName})` : ''}`
                     const hasFixed = Number(line.fixedSellingPriceHt) > 0
                     const marginColor = p.margeReelle < 0 ? 'text-red-600' : p.margeReelle < 5 ? 'text-amber-600' : 'text-green-700'
-
                     const isLoss = p.prUnit > 0 && p.pvFinal < p.prUnit
+                    const isFirstOfGroup = idx === 0 || lines[idx - 1].orderLineId !== line.orderLineId
                     return (
-                      <div key={line.orderLineId}>
+                      <div key={line.lineKey}>
                         <div
                           className={`py-2.5 grid gap-1.5 items-center ${isLoss ? 'bg-red-50/40' : ''}`}
                           style={{ gridTemplateColumns: PRICE_GRID }}
                         >
                           <div className={`min-w-0 sticky left-0 z-10 pl-4 pr-2 ${isLoss ? 'bg-red-50' : 'bg-white'}`}>
-                            <div className="text-sm text-gray-900 truncate" title={label}>{label}</div>
-                            <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
+                            {isFirstOfGroup ? (
+                              <>
+                                <div className="text-sm text-gray-900 truncate" title={label}>{label}</div>
+                                <div className="text-xs text-gray-400 font-mono mt-0.5">{line.productCode}</div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-gray-500 pl-3 flex items-center gap-1">
+                                <span className="text-gray-300">└</span>
+                                <span className="font-mono">{line.lotNumber || '—'}</span>
+                              </div>
+                            )}
                           </div>
 
+                          <input
+                            type="number" min={1} value={line.unitsPerCarton}
+                            onChange={e => updateLine(line.lineKey, { unitsPerCarton: e.target.value })}
+                            className={`${inputCls} text-right px-2 py-1 text-xs`}
+                          />
+
+                          <input
+                            type="number" step="0.0001" min={0} value={line.unitFobPricePerCarton}
+                            onChange={e => updateLine(line.lineKey, { unitFobPricePerCarton: e.target.value })}
+                            placeholder="0.00"
+                            className={`${inputCls} text-right px-2 py-1 text-xs`}
+                          />
+
                           <div className="text-right text-xs font-mono text-gray-600">
-                            {p.paUnit > 0 ? fmtNum(p.paUnit, 0) : <span className="text-gray-300">—</span>}
+                            {(() => { const pa = paUnitXof(line, exchangeRateToXof); return pa > 0 ? fmtNum(pa, 0) : <span className="text-gray-300">—</span> })()}
                           </div>
 
                           <div className="text-right text-xs font-mono font-semibold text-gray-800">
@@ -521,7 +700,7 @@ export function ReceiveGoodsPage() {
                             <input
                               type="number" step="0.01" min={0} max={100}
                               value={line.marginRate}
-                              onChange={e => updateLine(idx, { marginRate: e.target.value })}
+                              onChange={e => updateLine(line.lineKey, { marginRate: e.target.value })}
                               className={`${inputCls} pr-5 py-1 text-right text-xs`}
                             />
                             <span className="absolute right-1.5 text-xs text-gray-400 pointer-events-none">%</span>
@@ -534,7 +713,7 @@ export function ReceiveGoodsPage() {
                           <input
                             type="number" step="1" min={0}
                             value={line.fixedSellingPriceHt}
-                            onChange={e => updateLine(idx, { fixedSellingPriceHt: e.target.value })}
+                            onChange={e => updateLine(line.lineKey, { fixedSellingPriceHt: e.target.value })}
                             placeholder={p.pvCalc > 0 ? String(Math.round(p.pvCalc)) : 'auto'}
                             className={`${inputCls} text-right px-2 py-1 text-xs ${hasFixed ? 'border-brand-400 bg-brand-50 text-brand-800 font-semibold' : ''}`}
                           />
@@ -546,22 +725,20 @@ export function ReceiveGoodsPage() {
                         {isLoss && (
                           <div className="px-4 pb-2 flex items-center gap-2 text-xs text-red-600 font-medium">
                             <AlertTriangle size={12} />
-                            Perte sur ce produit — PV ({fmtNum(p.pvFinal, 0)} XOF) inférieur au PR ({fmtNum(p.prUnit, 0)} XOF).
-                            Ajustez la marge ou saisissez un PV fixé supérieur à {fmtNum(p.prUnit, 0)} XOF.
+                            Perte — PV ({fmtNum(p.pvFinal, 0)} XOF) inférieur au PR ({fmtNum(p.prUnit, 0)} XOF).
                           </div>
                         )}
                       </div>
                     )
                   })}
                 </div>
-
-                </div>{/* minWidth */}
-                </div>{/* overflow-x-auto */}
+                </div>
+                </div>
 
                 <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/60">
                   <p className="text-xs text-gray-400">
-                    PR = PA × (1+comm.) × (1+fret) × (1+transit) × (1+transf.) — PA inclut l'impact des pertes.
-                    PV fixé remplace le PV calculé comme prix de vente final du produit.
+                    PR = PA × (1+comm.) × (1+fret) × (1+transit) × (1+transf.) — PA inclut l'impact des pertes boîtes.
+                    PV fixé remplace le PV calculé.
                   </p>
                 </div>
               </>
@@ -604,21 +781,29 @@ export function ReceiveGoodsPage() {
               </div>
             )}
             <div className="flex justify-between text-xs">
-              <span className="text-green-700">Bonnes unités</span>
-              <span className="font-mono font-semibold text-green-700">{fmtNum(totalGoodUnits)}</span>
+              <span className="text-green-700">Bonnes boîtes</span>
+              <span className="font-mono font-semibold text-green-700">{fmtNum(sumGoodBoxes)}</span>
             </div>
-            {totalLostCartons > 0 && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-red-600 flex items-center gap-1">
-                  <AlertTriangle size={11} />
-                  Cartons perdus
-                </span>
-                <span className="font-mono font-semibold text-red-600">{fmtNum(totalLostCartons)}</span>
-              </div>
+            {sumLostBoxes > 0 && (
+              <>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-red-600 flex items-center gap-1">
+                    <AlertTriangle size={11} />
+                    Boîtes perdues
+                  </span>
+                  <span className="font-mono font-semibold text-red-600">{fmtNum(sumLostBoxes)}</span>
+                </div>
+                {avoirFournisseurXof > 0 && (
+                  <div className="flex items-center justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 -mx-1">
+                    <span className="text-amber-700 font-medium">Avoir fournisseur estimé</span>
+                    <span className="font-mono font-semibold text-amber-700">{fmtXof(avoirFournisseurXof)}</span>
+                  </div>
+                )}
+              </>
             )}
             {prMoyen > 0 && (
               <div className="flex justify-between text-xs border-t border-gray-100 pt-2">
-                <span className="text-gray-500">PR moyen/unité</span>
+                <span className="text-gray-500">PR moyen/boîte</span>
                 <span className="font-mono font-semibold text-gray-800">{fmtNum(prMoyen, 0)} XOF</span>
               </div>
             )}
@@ -639,7 +824,7 @@ export function ReceiveGoodsPage() {
                   {lossLines.map(l => {
                     const p = calcLinePricing(l, exchangeRateToXof, rates)
                     return (
-                      <li key={l.orderLineId} className="text-xs text-red-600">
+                      <li key={l.lineKey} className="text-xs text-red-600">
                         {l.productDesignation} — marge {p.margeReelle.toFixed(1)}%
                       </li>
                     )

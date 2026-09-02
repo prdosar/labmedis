@@ -173,4 +173,24 @@ public class SupplierOrdersController : ControllerBase
         await _service.SendOrderByEmailAsync(id, dto.RecipientEmail, ct);
         return Ok(new { message = "Bon de commande envoyé par email." });
     }
+
+    // ── Factures avoir fournisseurs ───────────────────────────────────────────────
+
+    [HttpGet("credit-notes")]
+    public async Task<ActionResult<PagedResult<SupplierCreditNoteDto>>> GetAllCreditNotes(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 50,
+        [FromQuery] string? status = null,
+        [FromQuery] long? supplierId = null,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllCreditNotesAsync(page, size, status, supplierId, ct));
+
+    [HttpGet("{id:long}/credit-notes")]
+    public async Task<ActionResult<IReadOnlyList<SupplierCreditNoteDto>>> GetCreditNotesByOrder(long id, CancellationToken ct)
+        => Ok(await _service.GetCreditNotesByOrderAsync(id, ct));
+
+    [HttpPatch("credit-notes/{creditNoteId:long}/status")]
+    public async Task<ActionResult<SupplierCreditNoteDto>> UpdateCreditNoteStatus(
+        long creditNoteId, [FromBody] UpdateCreditNoteStatusDto dto, CancellationToken ct)
+        => Ok(await _service.UpdateCreditNoteStatusAsync(creditNoteId, dto, ct));
 }

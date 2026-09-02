@@ -520,6 +520,29 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         {
             await PostLossJournalEntryAsync(
                 purchase, totalLostFobXof, order.Supplier?.Name ?? "", arrivalRef, ct);
+
+            // Auto-generate supplier credit note for the lost boxes
+            var totalLostBoxes = dto.Lines.Sum(l => l.QuantityLostCartons); // upc=1 → cartons = boxes
+            var creditNoteRef = await NextCreditNoteReferenceAsync(ct);
+            var creditNote = new SupplierCreditNote
+            {
+                Reference = creditNoteRef,
+                SupplierOrderId = order.Id,
+                SupplierInvoiceId = order.SupplierInvoice?.Id,
+                PurchaseId = purchase.Id,
+                SupplierId = order.SupplierId,
+                CreditNoteDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                AmountForeign = dto.ExchangeRateToXof > 0
+                    ? Math.Round(totalLostFobXof / dto.ExchangeRateToXof, 4)
+                    : 0m,
+                Currency = order.Currency ?? "EUR",
+                ExchangeRateToXof = dto.ExchangeRateToXof,
+                AmountXof = Math.Round(totalLostFobXof, 2),
+                LostBoxesCount = totalLostBoxes,
+                Notes = $"Généré automatiquement — arrivage {arrivalRef}, {totalLostBoxes} boîte(s) perdues."
+            };
+            DbContext.SupplierCreditNotes.Add(creditNote);
+            await DbContext.SaveChangesAsync(ct);
         }
 
         // Pricing structure charges: Commission → Fret → Transit → Frais transfert
@@ -1054,6 +1077,105 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         c.CreditAccountCode,
         c.JournalEntryId,
         c.Notes,
+        c.CreatedAt);
+
+    // ── Factures avoir fournisseurs ──────────────────────────────────────────────
+
+    public async Task<PagedResult<SupplierCreditNoteDto>> GetAllCreditNotesAsync(
+        int page, int size, string? status, long? supplierId = null, CancellationToken ct = default)
+    {
+        var query = DbContext.SupplierCreditNotes
+            .Include(c => c.Supplier)
+            .Include(c => c.SupplierOrder)
+            .Include(c => c.SupplierInvoice)
+            .Include(c => c.Purchase)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<SupplierCreditNoteStatus>(status, out var s))
+            query = query.Where(c => c.Status == s);
+        if (supplierId.HasValue)
+            query = query.Where(c => c.SupplierId == supplierId.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(c => c.CreditNoteDate)
+            .Skip((page - 1) * size).Take(size)
+            .ToListAsync(ct);
+
+        return new PagedResult<SupplierCreditNoteDto>(items.Select(ToCreditNoteDto).ToList(), total, page, size);
+    }
+
+    public async Task<IReadOnlyList<SupplierCreditNoteDto>> GetCreditNotesByOrderAsync(long orderId, CancellationToken ct = default)
+    {
+        var items = await DbContext.SupplierCreditNotes
+            .Include(c => c.Supplier)
+            .Include(c => c.SupplierOrder)
+            .Include(c => c.SupplierInvoice)
+            .Include(c => c.Purchase)
+            .Where(c => c.SupplierOrderId == orderId)
+            .OrderByDescending(c => c.CreditNoteDate)
+            .ToListAsync(ct);
+
+        return items.Select(ToCreditNoteDto).ToList();
+    }
+
+    public async Task<SupplierCreditNoteDto> UpdateCreditNoteStatusAsync(
+        long creditNoteId, UpdateCreditNoteStatusDto dto, CancellationToken ct = default)
+    {
+        var creditNote = await DbContext.SupplierCreditNotes
+            .Include(c => c.Supplier)
+            .Include(c => c.SupplierOrder)
+            .Include(c => c.SupplierInvoice)
+            .Include(c => c.Purchase)
+            .FirstOrDefaultAsync(c => c.Id == creditNoteId, ct)
+            ?? throw new DomainException($"Facture avoir introuvable (Id={creditNoteId}).");
+
+        if (!Enum.TryParse<SupplierCreditNoteStatus>(dto.Status, out var newStatus))
+            throw new DomainException($"Statut invalide : {dto.Status}");
+
+        creditNote.UpdateStatus(newStatus, dto.Notes);
+        await DbContext.SaveChangesAsync(ct);
+
+        return ToCreditNoteDto(creditNote);
+    }
+
+    private async Task<string> NextCreditNoteReferenceAsync(CancellationToken ct)
+    {
+        var year = DateTime.UtcNow.Year;
+        var prefix = $"AVOIR-{year}-";
+        var existing = await DbContext.SupplierCreditNotes
+            .IgnoreQueryFilters()
+            .Where(c => c.Reference.StartsWith(prefix))
+            .Select(c => c.Reference)
+            .ToListAsync(ct);
+
+        var max = existing
+            .Select(r => { var parts = r.Split('-'); return parts.Length == 3 && int.TryParse(parts[2], out var n) ? n : 0; })
+            .DefaultIfEmpty(0).Max();
+
+        return $"{prefix}{(max + 1):D3}";
+    }
+
+    private static SupplierCreditNoteDto ToCreditNoteDto(SupplierCreditNote c) => new(
+        c.Id,
+        c.Reference,
+        c.SupplierOrderId,
+        c.SupplierOrder?.Reference ?? "",
+        c.SupplierInvoiceId,
+        c.SupplierInvoice?.InvoiceReference,
+        c.PurchaseId,
+        c.Purchase?.Reference ?? "",
+        c.SupplierId,
+        c.Supplier?.Name ?? "",
+        c.CreditNoteDate,
+        c.AmountForeign,
+        c.Currency,
+        c.ExchangeRateToXof,
+        c.AmountXof,
+        c.LostBoxesCount,
+        c.Status.ToString(),
+        c.Notes,
+        c.ResolvedAt,
         c.CreatedAt);
 
     public async Task SendOrderByEmailAsync(long orderId, string? recipientEmail, CancellationToken ct = default)

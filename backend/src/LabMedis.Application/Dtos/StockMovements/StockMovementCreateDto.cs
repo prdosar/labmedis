@@ -5,7 +5,7 @@ namespace LabMedis.Application.Dtos.StockMovements;
 public record StockMovementCreateDto(
     long ProductId,
     long WarehouseId,
-    long PurchaseLineId,
+    long? PurchaseLineId,
     StockMovementType MovementType,
     int Quantity,
     DateTime MovementDate,

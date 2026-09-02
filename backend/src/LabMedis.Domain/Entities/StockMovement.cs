@@ -11,7 +11,7 @@ public class StockMovement : BaseEntity
     public long WarehouseId { get; set; }
     public Warehouse? Warehouse { get; set; }
 
-    public long PurchaseLineId { get; set; }
+    public long? PurchaseLineId { get; set; }
     public PurchaseLine? PurchaseLine { get; set; }
 
     public StockMovementType MovementType { get; set; }

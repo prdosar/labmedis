@@ -7,16 +7,18 @@ import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 
-const GRID_TPL = '1fr 5rem 6rem 8rem 8rem'
+// Produit | U/ctn | Qté (boîtes) | FOB/boîte (input) | FOB/carton (auto) | Montant
+const GRID_TPL = 'minmax(140px,1fr) 4rem 5.5rem 8rem 7rem 8rem'
 
 interface LineInput {
   lineId: number
   productDesignation: string
   packagingName: string | null
   dosageName: string | null
-  quantity: number
+  quantity: number          // cartons commandés
+  unitsPerCarton: number    // boîtes par carton
   orderUnit: string
-  unitFobPrice: string
+  unitFobPricePerBox: string // saisie : FOB par boîte
 }
 
 const DOC_TYPES = ['Proforma', 'Facture', 'Autre']
@@ -84,15 +86,20 @@ export function ReceiveProformaPage() {
         // Default origin to supplier's country if not already set on the order
         setOrigin(o.origin ?? o.supplierCountryName ?? '')
         setExpectedShippingDate(o.expectedShippingDate ?? '')
-        setLines(o.lines.map(l => ({
-          lineId: l.id,
-          productDesignation: l.productDesignation,
-          packagingName: l.packagingName,
-          dosageName: l.dosageName,
-          quantity: l.quantity,
-          orderUnit: l.orderUnit,
-          unitFobPrice: l.unitFobPrice != null ? String(l.unitFobPrice) : '',
-        })))
+        setLines(o.lines.map(l => {
+          const upc = Math.max(1, l.unitsPerCarton ?? l.packagingUnitsPerPackaging ?? 1)
+          return {
+            lineId: l.id,
+            productDesignation: l.productDesignation,
+            packagingName: l.packagingName,
+            dosageName: l.dosageName,
+            quantity: l.quantity,
+            unitsPerCarton: upc,
+            orderUnit: l.orderUnit,
+            // unitFobPrice stocké en FOB/carton → convertir en FOB/boîte pour l'affichage
+            unitFobPricePerBox: l.unitFobPrice != null ? String(l.unitFobPrice / upc) : '',
+          }
+        }))
         setDocuments(o.documents ?? [])
       })
       .catch(() => toast('Commande introuvable.', 'error'))
@@ -100,7 +107,7 @@ export function ReceiveProformaPage() {
   }, [id])
 
   function updateLinePrice(idx: number, value: string) {
-    setLines(prev => prev.map((l, i) => i === idx ? { ...l, unitFobPrice: value } : l))
+    setLines(prev => prev.map((l, i) => i === idx ? { ...l, unitFobPricePerBox: value } : l))
   }
 
   async function handleSave() {
@@ -117,7 +124,8 @@ export function ReceiveProformaPage() {
         expectedShippingDate: expectedShippingDate || null,
         lines: lines.map(l => ({
           lineId: l.lineId,
-          unitFobPrice: l.unitFobPrice ? Number(l.unitFobPrice) : null,
+          // Sauvegarder en FOB/carton = FOB/boîte × U/ctn (attendu par ReceiveGoods)
+          unitFobPrice: l.unitFobPricePerBox ? Number(l.unitFobPricePerBox) * l.unitsPerCarton : null,
         })),
       })
       toast('Proforma enregistrée.', 'success')
@@ -158,10 +166,11 @@ export function ReceiveProformaPage() {
     }
   }
 
-  // Summary
+  // Summary — montant = FOB/boîte × qty_boîtes (= FOB/carton × qty_cartons, même résultat)
   const totalLines = lines.reduce((acc, l) => {
-    const price = Number(l.unitFobPrice) || 0
-    return acc + price * l.quantity
+    const pricePerBox = Number(l.unitFobPricePerBox) || 0
+    const qtyBoxes = l.quantity * l.unitsPerCarton
+    return acc + pricePerBox * qtyBoxes
   }, 0)
   const freight = Number(freightAmount) || 0
   const grandTotal = totalLines + freight
@@ -206,28 +215,31 @@ export function ReceiveProformaPage() {
             <thead>
               <tr style={{ backgroundColor: '#f0f0f0' }}>
                 <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'left' }}>Désignation</th>
-                <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'center', width: '70px' }}>Qté</th>
-                <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'right', width: '90px' }}>Prix Unitaire</th>
+                <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'center', width: '60px' }}>U/ctn</th>
+                <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'center', width: '80px' }}>Qté (btes)</th>
+                <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'right', width: '90px' }}>FOB/bte</th>
                 <th style={{ border: '1px solid #999', padding: '5px 8px', textAlign: 'right', width: '100px' }}>Montant</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l, i) => {
-                const price = Number(l.unitFobPrice) || 0
-                const amount = price * l.quantity
+                const pricePerBox = Number(l.unitFobPricePerBox) || 0
+                const qtyBoxes = l.quantity * l.unitsPerCarton
+                const amount = pricePerBox * qtyBoxes
                 const label = `${l.productDesignation}${l.packagingName ? ` (${l.packagingName})` : ''}${l.dosageName ? ` — ${l.dosageName}` : ''}`
                 return (
                   <tr key={l.lineId} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
                     <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{label}</td>
-                    <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'center' }}>{l.quantity}</td>
-                    <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'right' }}>{fmt(price)}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'center' }}>{l.unitsPerCarton}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'center' }}>{qtyBoxes.toLocaleString('fr-FR')}</td>
+                    <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'right' }}>{fmt(pricePerBox)}</td>
                     <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'right' }}>{fmt(amount)}</td>
                   </tr>
                 )
               })}
               {freight > 0 && (
                 <tr>
-                  <td colSpan={2} style={{ border: '1px solid #ccc', padding: '4px 8px', fontStyle: 'italic' }}>FOB + FRET à rendu Lomé</td>
+                  <td colSpan={2} style={{ border: '1px solid #ccc', padding: '4px 8px', fontStyle: 'italic' }}>Fret</td>
                   <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'right' }}>1</td>
                   <td style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'right' }}>{fmt(freight)}</td>
                 </tr>
@@ -243,7 +255,7 @@ export function ReceiveProformaPage() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div><strong>Sous-total :</strong> {fmt(totalLines)} {currency}</div>
-              {freight > 0 && <div><strong>FOB+FRET :</strong> {fmt(freight)} {currency}</div>}
+              {freight > 0 && <div><strong>Fret :</strong> {fmt(freight)} {currency}</div>}
               <div style={{ fontSize: '12pt', fontWeight: 'bold', borderTop: '1px solid #000', marginTop: '4px', paddingTop: '4px' }}>
                 <strong>Montant Total :</strong> {fmt(grandTotal)} {currency}
               </div>
@@ -352,16 +364,19 @@ export function ReceiveProformaPage() {
                 style={{ gridTemplateColumns: GRID_TPL }}
               >
                 <span>Produit</span>
-                <span className="text-right">Qté</span>
-                <span className="text-right">Unité</span>
-                <span className="text-right">Prix unit. {currency}</span>
+                <span className="text-right">U/ctn</span>
+                <span className="text-right">Qté (btes)</span>
+                <span className="text-right">FOB/bte {currency}</span>
+                <span className="text-right text-gray-300">FOB/ctn</span>
                 <span className="text-right">Montant {currency}</span>
               </div>
 
               <div className="divide-y divide-gray-50">
                 {lines.map((line, idx) => {
-                  const price = Number(line.unitFobPrice) || 0
-                  const amount = price * line.quantity
+                  const pricePerBox = Number(line.unitFobPricePerBox) || 0
+                  const qtyBoxes = line.quantity * line.unitsPerCarton
+                  const fobPerCarton = pricePerBox * line.unitsPerCarton
+                  const amount = pricePerBox * qtyBoxes
                   const label = `${line.productDesignation}${line.packagingName ? ` (${line.packagingName})` : ''}`
                   return (
                     <div
@@ -373,21 +388,32 @@ export function ReceiveProformaPage() {
                         <div className="text-sm text-gray-900">{label}</div>
                         {line.dosageName && <div className="text-xs text-gray-400">{line.dosageName}</div>}
                       </div>
-                      <div className="text-sm text-gray-700 text-right">{line.quantity}</div>
-                      <div className="text-xs text-gray-500 text-right">{line.orderUnit}</div>
+                      {/* U/ctn */}
+                      <div className="text-xs text-gray-500 text-right font-mono">{line.unitsPerCarton}</div>
+                      {/* Qté en boîtes */}
+                      <div className="text-right">
+                        <span className="text-sm font-semibold text-gray-900">{qtyBoxes.toLocaleString('fr-FR')}</span>
+                        <div className="text-xs text-gray-400">{line.quantity} {line.orderUnit}</div>
+                      </div>
+                      {/* FOB/boîte — champ de saisie */}
                       <div className="flex justify-end">
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           min={0}
-                          value={line.unitFobPrice}
+                          value={line.unitFobPricePerBox}
                           onChange={e => updateLinePrice(idx, e.target.value)}
-                          placeholder="0.00"
+                          placeholder="0.0000"
                           className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-right text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                         />
                       </div>
+                      {/* FOB/carton — auto-calculé */}
+                      <div className="text-right text-xs font-mono text-gray-400">
+                        {fobPerCarton > 0 ? fmt(fobPerCarton) : '—'}
+                      </div>
+                      {/* Montant total */}
                       <div className="text-sm font-medium text-gray-900 text-right">
-                        {amount > 0 ? `${fmt(amount)}` : '—'}
+                        {amount > 0 ? fmt(amount) : '—'}
                       </div>
                     </div>
                   )
@@ -403,7 +429,7 @@ export function ReceiveProformaPage() {
               {/* Freight line */}
               <div className="px-5 py-3 border-t border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-gray-600 italic">FOB + FRET à rendu Lomé</span>
+                  <span className="text-sm text-gray-600 italic">Fret</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -520,7 +546,7 @@ export function ReceiveProformaPage() {
               </div>
               {freight > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">FOB + FRET</span>
+                  <span className="text-gray-500">Fret</span>
                   <span className="font-medium">{fmt(freight)} {currency}</span>
                 </div>
               )}

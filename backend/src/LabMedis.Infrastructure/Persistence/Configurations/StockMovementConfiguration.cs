@@ -28,6 +28,7 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.HasOne(x => x.PurchaseLine)
             .WithMany(pl => pl.StockMovements)
             .HasForeignKey(x => x.PurchaseLineId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.ProductId, x.MovementDate });

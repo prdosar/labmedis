@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Paperclip, ExternalLink } from 'lucide-react'
-import { invoicesApi, type PaymentFormData } from '../../api/endpoints'
-import type { InvoiceDto, InvoicePaymentDto } from '../../api/types'
+import { ArrowLeft, Plus, Paperclip, ExternalLink, RotateCcw } from 'lucide-react'
+import { invoicesApi, customerCreditNotesApi, type PaymentFormData } from '../../api/endpoints'
+import type { InvoiceDto, InvoicePaymentDto, CustomerCreditNoteDto } from '../../api/types'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Badge, invoiceStatusBadge } from '../../components/ui/Badge'
@@ -51,12 +51,17 @@ export function InvoiceDetailPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [creditNotes, setCreditNotes] = useState<CustomerCreditNoteDto[]>([])
 
   function load() {
     if (!id) return
     setLoading(true)
     invoicesApi.getById(Number(id))
-      .then(setInvoice)
+      .then(inv => {
+        setInvoice(inv)
+        return customerCreditNotesApi.getByInvoice(inv.id)
+      })
+      .then(setCreditNotes)
       .catch(() => toast('Facture introuvable.', 'error'))
       .finally(() => setLoading(false))
   }
@@ -225,6 +230,58 @@ export function InvoiceDetailPage() {
           </table>
         )}
       </div>
+
+      {/* Credit notes (avoirs clients) */}
+      {creditNotes.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-amber-100 flex items-center gap-2">
+            <RotateCcw size={14} className="text-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-800">Avoirs clients liés ({creditNotes.length})</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-amber-50 text-xs text-amber-700 uppercase tracking-wide">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Référence</th>
+                <th className="px-4 py-2.5 text-left">Date</th>
+                <th className="px-4 py-2.5 text-right">Lignes</th>
+                <th className="px-4 py-2.5 text-right">Montant TTC</th>
+                <th className="px-4 py-2.5 text-left">Statut</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-50">
+              {creditNotes.map(cn => (
+                <tr key={cn.id} className="hover:bg-amber-50/40">
+                  <td className="px-4 py-2.5">
+                    <button onClick={() => navigate(`/invoices/customers/credit-notes/${cn.id}`)}
+                      className="font-mono font-medium text-amber-700 hover:underline">
+                      {cn.reference}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-600">{fmtDate(cn.creditNoteDate)}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-600">{cn.lines.length}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-amber-700">{fmtXof(cn.totalAmountTtc)}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                      ${cn.status === 'DéduitDeFacture' ? 'bg-blue-100 text-blue-700' :
+                        cn.status === 'Remboursé' ? 'bg-green-100 text-green-700' :
+                        cn.status === 'Annulé' ? 'bg-gray-100 text-gray-400' :
+                        'bg-amber-100 text-amber-700'}`}>
+                      {cn.status === 'EnAttente' ? 'En attente' :
+                       cn.status === 'DéduitDeFacture' ? 'Déduit' :
+                       cn.status === 'Remboursé' ? 'Remboursé' : 'Annulé'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {creditNotes.some(cn => cn.status === 'EnAttente') && (
+            <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
+              Total avoirs en attente : <strong>{fmtXof(creditNotes.filter(cn => cn.status === 'EnAttente').reduce((s, cn) => s + cn.totalAmountTtc, 0))}</strong>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Payment modal */}
       <Modal isOpen={payOpen} onClose={() => setPayOpen(false)} title="Enregistrer un encaissement" size="sm">
