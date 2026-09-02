@@ -120,9 +120,8 @@ public static class DataSeeder
         if (await db.Countries.AnyAsync(ct))
             return;
 
-        var sorted = CountrySeeds.OrderBy(n => n).ToArray();
-        for (var i = 0; i < sorted.Length; i++)
-            db.Countries.Add(new Country { Name = sorted[i], IsoCode = (i + 1).ToString("D2") });
+        foreach (var (name, isoCode) in CountrySeeds)
+            db.Countries.Add(new Country { Name = name, IsoCode = isoCode });
         await db.SaveChangesAsync(ct);
     }
 
@@ -309,9 +308,15 @@ public static class DataSeeder
         var packagings = await db.Packagings
             .ToDictionaryAsync(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase, ct);
 
+        var countryIsoCodes = await db.Countries
+            .ToDictionaryAsync(c => c.Id, c => c.IsoCode ?? "00", ct);
+
         var supplierEntities = await db.Suppliers.ToListAsync(ct);
         var suppliers = supplierEntities.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
         var supplierCodesById = supplierEntities.ToDictionary(s => s.Id, s => s.Code);
+        var supplierCountryCode = supplierEntities.ToDictionary(
+            s => s.Id,
+            s => s.CountryId.HasValue ? countryIsoCodes.GetValueOrDefault(s.CountryId.Value, "00") : "00");
 
         var firstClassByCategory = await db.TherapeuticClasses
             .GroupBy(t => t.Category!.Name)
@@ -365,7 +370,8 @@ public static class DataSeeder
                 packagingId = pid;
 
             var supplierCode = supplierCodesById.GetValueOrDefault(currentSupplierId, "00");
-            var productPrefix = $"00{supplierCode}{warehouse.Code}";
+            var countryCode  = supplierCountryCode.GetValueOrDefault(currentSupplierId, "00");
+            var productPrefix = $"{countryCode}{supplierCode}{warehouse.Code}";
             prefixCounts[productPrefix] = prefixCounts.GetValueOrDefault(productPrefix) + 1;
             var productCode = $"{productPrefix}{prefixCounts[productPrefix]:D3}";
 
@@ -481,9 +487,15 @@ public static class DataSeeder
         "carton/72", "carton/84", "carton/100", "carton/200"
     };
 
-    private static readonly string[] CountrySeeds =
+    private static readonly (string Name, string IsoCode)[] CountrySeeds =
     {
-        "Togo", "France", "Maroc", "Tunisie", "Inde", "Suisse", "Burkina Faso"
+        ("Togo",         "TG"),
+        ("France",       "FR"),
+        ("Maroc",        "MA"),
+        ("Tunisie",      "TN"),
+        ("Inde",         "IN"),
+        ("Suisse",       "CH"),
+        ("Burkina Faso", "BF"),
     };
 
     private static readonly (string Code, string Name, string Description)[] TransportTypeSeeds =
@@ -601,23 +613,23 @@ public static class DataSeeder
         // ── IBERMA ── Médicaments ──────────────────────────────────────────────
         ("Mycoderme poudre f/30g",                     "médicament",        "poudre",  "flacon/30g",          null,         "anti-fongiques",               "IBERMA"),
         ("Mycoderme crème t/40g",                      "médicament",        "crème",   "tube/40g",            null,         null,                           null),
-        ("Mycoderme 150mg ovules b/3",                 "médicament",        "ovule",   "boite/3",             null,         null,                           null),
-        ("Ibertin 1g/125mg sachet b/12",               "médicament",        "poudre pour suspension buvable", "boite/12", null, "antibiotiques",           null),
-        ("Ibertin 1g/125mg sachet b/16",               "médicament",        "poudre pour suspension buvable", "boite/16", null, null,                      null),
-        ("Ibertin 1g/125mg sachet b/24",               "médicament",        "poudre pour suspension buvable", "boite/24", null, null,                      null),
-        ("Aulcer 20mg gel b/28",                       "médicament",        "gélule",  "boite/28",            null,         "inhibiteurs de pompe à protons", null),
+        ("Mycoderme 150mg ovules b/3",                 "médicament",        "ovule",   null,                  null,         null,                           null),
+        ("Ibertin 1g/125mg sachet b/12",               "médicament",        "poudre pour suspension buvable", null, null,  "antibiotiques",                null),
+        ("Ibertin 1g/125mg sachet b/16",               "médicament",        "poudre pour suspension buvable", null, null,  null,                           null),
+        ("Ibertin 1g/125mg sachet b/24",               "médicament",        "poudre pour suspension buvable", null, null,  null,                           null),
+        ("Aulcer 20mg gel b/28",                       "médicament",        "gélule",  null,                  null,         "inhibiteurs de pompe à protons", null),
 
-        // ── DEO GRATIAS PHARMA ── Médicaments ─────────────────────────────────
+        // ── DEO GRATIAS GROUP ── Médicaments ──────────────────────────────────
         ("Effermol inj perf f/100ml",                  "médicament",        "solution injectable", "flacon/100ml", "carton/50", "antalgiques injectables", "DEO GRATIAS GROUP"),
         ("Effermol 500mg cp b/100*10",                 "médicament",        "comprimé", null,                 null,         "antalgiques oraux",            null),
         ("Effermol 500mg cp b/20",                     "médicament",        "comprimé", null,                 null,         null,                           null),
         ("Plasmolyz 20/120mg cp b/50*6",               "médicament",        "comprimé", null,                 null,         "antibiotiques",                null),
         ("Plasmolyz 80/480mg cp b/50*6",               "médicament",        "comprimé", null,                 null,         null,                           null),
         ("Plasmolyz 80/480mg cp b/6",                  "médicament",        "comprimé", null,                 null,         null,                           null),
+        ("ABZOLE 400 MG CP B/100",                     "médicament",        "comprimé", "boite/100 plaquettes","carton/36", "antiparasitaires",             null),
 
-        // ── GALPHARMA ── Médicaments ───────────────────────────────────────────
-        ("ABZOLE 400 MG CP B/100",                     "médicament",        "comprimé", "boite/100 plaquettes","carton/36", "antiparasitaires",             "GALPHARMA"),
-        ("ALLERGICA 10MG CPR B/30",                    "médicament",        "comprimé", "boite/30",            "carton/54", "anti-histaminique",            null),
+        // ── GALPHARMA ── Médicaments (bloc 1 : ALLERGICA → DERMOCORT) ─────────
+        ("ALLERGICA 10MG CPR B/30",                    "médicament",        "comprimé", "boite/30",            "carton/54", "anti-histaminique",            "GALPHARMA"),
         ("ALLERGICA SP F/150ML",                       "médicament",        "solution buvable", "flacon/150ml", "carton/36", null,                         null),
         ("LEVOSTAMINE 5mg CP B/30",                    "médicament",        "comprimé", "boite/30",            "carton/72", null,                           null),
         ("CETRADOL GEL 325/37,5mg B/20",               "médicament",        "gélule",  "boite/20",            "carton/84", "antalgiques oraux",            null),
@@ -631,14 +643,16 @@ public static class DataSeeder
         ("PECTOLYSE ADULTE SANS SUCRE 0,3% SIROP F/125ML", "médicament",   "solution buvable", "flacon/125ml", "carton/48", "antitussif",                  null),
         ("PECTOLYSE ENFANT 0,1% SIROP F/125ML",        "médicament",        "solution buvable", "flacon/125ml", "carton/48", null,                         null),
         ("DERMOCORT 0,05% CREME T/10G",                "médicament",        "crème",   "tube/10g",            "carton/100","corticoides locaux",           null),
-        ("TRANSITON ADULTE 10G SACHET B/14",           "médicament",        "poudre pour suspension buvable", "boite/14", "carton/30", "laxatifs",         null),
-        ("TRANSITON ENFANT 4G SACHET B/20",            "médicament",        "poudre pour suspension buvable", "boite/20", "carton/30", null,               null),
-        ("LODEPINE 5MG GELULE B/30",                   "médicament",        "gélule",  "boite/30",            "carton/20", "antihypertenseurs",            null),
-        ("COPRED ODT 20MG CP ORODISPERSIBLE B/20",     "médicament",        "comprimé orodispersible", "boite/20", "carton/72", "corticoides oraux",       null),
 
         // ── B&B LIFE SCIENCE ── Compléments alimentaires ──────────────────────
         ("B-PROTEI ALL 200g",                          "complement alimentaire", "poudre", "boite/200g",      "carton/50", "protéines alimentaires",       "B&B LIFE SCIENCE"),
         ("B-PROTEI MOM 200g",                          "complement alimentaire", "poudre", "boite/200g",      "carton/50", null,                           null),
+
+        // ── GALPHARMA ── Médicaments (bloc 2 : après B&B, reprend avec TRANSITON)
+        ("TRANSITON ADULTE 10G SACHET B/14",           "médicament",        "poudre pour suspension buvable", "boite/14", "carton/30", "laxatifs",         "GALPHARMA"),
+        ("TRANSITON ENFANT 4G SACHET B/20",            "médicament",        "poudre pour suspension buvable", "boite/20", "carton/30", null,               null),
+        ("LODEPINE 5MG GELULE B/30",                   "médicament",        "gélule",  "boite/30",            "carton/20", "antihypertenseurs",            null),
+        ("COPRED ODT 20MG CP ORODISPERSIBLE B/20",     "médicament",        "comprimé orodispersible", "boite/20", "carton/72", "corticoides oraux",       null),
 
         // ── HORIBA ABX SAS ── Réactifs de laboratoire ─────────────────────────
         ("100 µL TEFLON SEAL",                         "réactifs de laboratoire", "joint d'étanchéité", null, null, "réactifs de laboratoire",            "HORIBA"),
