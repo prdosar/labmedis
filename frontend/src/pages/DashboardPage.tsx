@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Package, Users, ShoppingCart, FileText, Send, BarChart3, TrendingUp, Truck } from 'lucide-react'
+import { Package, Users, ShoppingCart, FileText, Send, BarChart3, Truck } from 'lucide-react'
 import { productsApi, suppliersApi, customersApi, purchasesApi, invoicesApi, deliveriesApi, stockMovementsApi } from '../api/endpoints'
 
 interface Stat {
@@ -60,7 +60,6 @@ export function DashboardPage() {
     { label: 'Factures', value: loading ? '—' : stats.invoices ?? 0, icon: <FileText size={22} />, color: 'text-yellow-600', bg: 'bg-yellow-50' },
     { label: 'Livraisons', value: loading ? '—' : stats.deliveries ?? 0, icon: <Send size={22} />, color: 'text-cyan-600', bg: 'bg-cyan-50' },
     { label: 'Mvts de stock', value: loading ? '—' : stats.movements ?? 0, icon: <BarChart3 size={22} />, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: 'Croissance', value: '+5.2%', icon: <TrendingUp size={22} />, color: 'text-green-600', bg: 'bg-green-50' },
   ]
 
   return (
