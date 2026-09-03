@@ -23,6 +23,9 @@ import { CustomerCreditNoteDetailPage } from './pages/invoices/CustomerCreditNot
 import { DeliveriesPage } from './pages/deliveries/DeliveriesPage'
 import { StockMovementsPage } from './pages/stock/StockMovementsPage'
 import { OpeningInventoryPage } from './pages/stock/OpeningInventoryPage'
+import { CustomerReturnsPage } from './pages/stock/CustomerReturnsPage'
+import { SupplierReturnsPage } from './pages/stock/SupplierReturnsPage'
+import { DiverseExitsPage } from './pages/stock/DiverseExitsPage'
 import { CategoriesPage } from './pages/config/CategoriesPage'
 import { TherapeuticClassesPage } from './pages/config/TherapeuticClassesPage'
 import { ProductFormsPage } from './pages/config/ProductFormsPage'
@@ -41,6 +44,9 @@ import { TrialBalancePage } from './pages/accounting/TrialBalancePage'
 import { PnLPage } from './pages/accounting/PnLPage'
 import { ThirdPartyLedgerPage } from './pages/accounting/ThirdPartyLedgerPage'
 import { SupplierAccountPage } from './pages/accounting/SupplierAccountPage'
+import { GeneralPurchasesPage } from './pages/accounting/GeneralPurchasesPage'
+import { OperatingExpensesPage } from './pages/accounting/OperatingExpensesPage'
+import { FixedAssetsPage } from './pages/accounting/FixedAssetsPage'
 import { CustomerOrdersPage } from './pages/orders/CustomerOrdersPage'
 import { CustomerOrderFormPage } from './pages/orders/CustomerOrderFormPage'
 import { CustomerOrderDetailPage } from './pages/orders/CustomerOrderDetailPage'
@@ -109,6 +115,9 @@ export default function App() {
               <Route path="/deliveries" element={<DeliveriesPage />} />
               <Route path="/stock-movements" element={<StockMovementsPage />} />
               <Route path="/stock/opening-inventory" element={<OpeningInventoryPage />} />
+              <Route path="/stock/customer-returns" element={<CustomerReturnsPage />} />
+              <Route path="/stock/supplier-returns" element={<SupplierReturnsPage />} />
+              <Route path="/stock/diverse-exits" element={<DiverseExitsPage />} />
               <Route path="/config/categories" element={<CategoriesPage />} />
               <Route path="/config/therapeutic-classes" element={<TherapeuticClassesPage />} />
               <Route path="/config/product-forms" element={<ProductFormsPage />} />
@@ -127,6 +136,9 @@ export default function App() {
               <Route path="/accounting/pnl" element={<PnLPage />} />
               <Route path="/accounting/third-party-ledger" element={<ThirdPartyLedgerPage />} />
               <Route path="/accounting/supplier-account" element={<SupplierAccountPage />} />
+              <Route path="/accounting/general-purchases" element={<GeneralPurchasesPage />} />
+              <Route path="/accounting/operating-expenses" element={<OperatingExpensesPage />} />
+              <Route path="/accounting/fixed-assets" element={<FixedAssetsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

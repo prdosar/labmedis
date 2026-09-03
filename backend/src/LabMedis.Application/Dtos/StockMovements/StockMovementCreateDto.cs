@@ -10,4 +10,5 @@ public record StockMovementCreateDto(
     int Quantity,
     DateTime MovementDate,
     string? Reference,
+    string? Reason,
     string? Notes);

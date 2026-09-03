@@ -29,6 +29,12 @@ import {
   Building2,
   BarChart3,
   PackageSearch,
+  Undo2,
+  ArrowLeftRight,
+  Trash2,
+  ShoppingCart,
+  Receipt,
+  TrendingDown,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import logo from '../../assets/logo.png'
@@ -56,9 +62,12 @@ const ordersNav: NavItem[] = [
 
 const deliveryItem: NavItem = { to: '/deliveries', label: 'Livraisons', icon: <Send size={17} /> }
 
-const stockNav: NavItem[] = [
-  { to: '/stock-movements', label: 'Mouvements de stock', icon: <BarChart3 size={17} /> },
-  { to: '/stock/opening-inventory', label: 'Inventaire d\'ouverture', icon: <PackageSearch size={17} /> },
+const stockNavItems: NavItem[] = [
+  { to: '/stock-movements', label: 'Mouvements', icon: <BarChart3 size={16} /> },
+  { to: '/stock/opening-inventory', label: 'Inventaire d\'ouverture', icon: <PackageSearch size={16} /> },
+  { to: '/stock/customer-returns', label: 'Retours clients', icon: <Undo2 size={16} /> },
+  { to: '/stock/supplier-returns', label: 'Retours fournisseurs', icon: <ArrowLeftRight size={16} /> },
+  { to: '/stock/diverse-exits', label: 'Sorties diverses', icon: <Trash2 size={16} /> },
 ]
 
 const configNav: NavItem[] = [
@@ -81,6 +90,9 @@ const accountingNav: NavItem[] = [
   { to: '/accounting/pnl', label: 'Compte de résultat', icon: <TrendingUp size={16} /> },
   { to: '/accounting/third-party-ledger', label: 'Grand livre tiers', icon: <BookUser size={16} /> },
   { to: '/accounting/supplier-account', label: 'Relevé fournisseur', icon: <Building2 size={16} /> },
+  { to: '/accounting/general-purchases', label: 'Achats généraux', icon: <ShoppingCart size={16} /> },
+  { to: '/accounting/operating-expenses', label: 'Charges', icon: <Receipt size={16} /> },
+  { to: '/accounting/fixed-assets', label: 'Amortissements', icon: <TrendingDown size={16} /> },
 ]
 
 const adminNav: NavItem[] = [
@@ -114,6 +126,49 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
       <div className="flex flex-col gap-0.5">
         {items.map(item => <NavItemLink key={item.to} item={item} />)}
       </div>
+    </div>
+  )
+}
+
+function StockSection() {
+  const location = useLocation()
+  const isActive = location.pathname.startsWith('/stock') || location.pathname === '/stock-movements'
+  const [open, setOpen] = useState(isActive)
+
+  return (
+    <div>
+      <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Stock</p>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+          ${isActive ? 'text-brand-600 bg-brand-50' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+      >
+        <span className="flex items-center gap-3">
+          <BarChart3 size={17} className={isActive ? 'text-brand-500' : ''} />
+          Inventaire & Mouvements
+        </span>
+        {open
+          ? <ChevronDown size={14} className="text-gray-400" />
+          : <ChevronRight size={14} className="text-gray-400" />
+        }
+      </button>
+      {open && (
+        <div className="mt-0.5 flex flex-col gap-0.5 ml-2 pl-3 border-l border-gray-100">
+          {stockNavItems.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors
+                ${isActive ? 'text-brand-600 font-semibold bg-brand-50' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`
+              }
+            >
+              <span className="shrink-0">{item.icon}</span>
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -267,7 +322,7 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4 flex flex-col gap-5">
         <NavSection label="Principal" items={mainNav} />
         <NavSection label="Catalogue & Tiers" items={businessNav} />
-        <NavSection label="Stock" items={stockNav} />
+        <StockSection />
         <div>
           <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Commandes</p>
           <div className="flex flex-col gap-0.5">

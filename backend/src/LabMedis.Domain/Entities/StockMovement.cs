@@ -19,5 +19,6 @@ public class StockMovement : BaseEntity
     public DateTime MovementDate { get; set; }
 
     public string? Reference { get; set; }
+    public string? Reason { get; set; }
     public string? Notes { get; set; }
 }

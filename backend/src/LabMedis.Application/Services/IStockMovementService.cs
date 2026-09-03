@@ -10,5 +10,6 @@ public interface IStockMovementService
     Task<PagedResult<StockMovementDto>> GetByWarehouseAsync(long warehouseId, int page = 1, int size = 10, CancellationToken cancellationToken = default);
     Task<StockMovementDto?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
     Task<StockMovementDto> CreateAsync(StockMovementCreateDto dto, CancellationToken cancellationToken = default);
+    Task<StockMovementDto> CreateDiverseExitAsync(DiverseExitCreateDto dto, CancellationToken cancellationToken = default);
     Task PostOpeningInventoryAsync(OpeningInventoryInput input, CancellationToken cancellationToken = default);
 }

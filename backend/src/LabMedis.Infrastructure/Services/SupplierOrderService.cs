@@ -1089,6 +1089,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             .Include(c => c.SupplierOrder)
             .Include(c => c.SupplierInvoice)
             .Include(c => c.Purchase)
+            .Include(c => c.SupplierReturn)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<SupplierCreditNoteStatus>(status, out var s))
@@ -1112,6 +1113,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             .Include(c => c.SupplierOrder)
             .Include(c => c.SupplierInvoice)
             .Include(c => c.Purchase)
+            .Include(c => c.SupplierReturn)
             .Where(c => c.SupplierOrderId == orderId)
             .OrderByDescending(c => c.CreditNoteDate)
             .ToListAsync(ct);
@@ -1127,6 +1129,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             .Include(c => c.SupplierOrder)
             .Include(c => c.SupplierInvoice)
             .Include(c => c.Purchase)
+            .Include(c => c.SupplierReturn)
             .FirstOrDefaultAsync(c => c.Id == creditNoteId, ct)
             ?? throw new DomainException($"Facture avoir introuvable (Id={creditNoteId}).");
 
@@ -1160,11 +1163,13 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         c.Id,
         c.Reference,
         c.SupplierOrderId,
-        c.SupplierOrder?.Reference ?? "",
+        c.SupplierOrder?.Reference,
         c.SupplierInvoiceId,
         c.SupplierInvoice?.InvoiceReference,
         c.PurchaseId,
-        c.Purchase?.Reference ?? "",
+        c.Purchase?.Reference,
+        c.SupplierReturnId,
+        c.SupplierReturn?.Reference,
         c.SupplierId,
         c.Supplier?.Name ?? "",
         c.CreditNoteDate,

@@ -24,6 +24,7 @@ public class SupplierCreditNoteConfiguration : IEntityTypeConfiguration<Supplier
         builder.HasOne(c => c.SupplierOrder)
             .WithMany()
             .HasForeignKey(c => c.SupplierOrderId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.SupplierInvoice)
@@ -34,7 +35,14 @@ public class SupplierCreditNoteConfiguration : IEntityTypeConfiguration<Supplier
         builder.HasOne(c => c.Purchase)
             .WithMany()
             .HasForeignKey(c => c.PurchaseId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(c => c.SupplierReturn)
+            .WithOne(r => r.SupplierCreditNote)
+            .HasForeignKey<SupplierCreditNote>(c => c.SupplierReturnId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(c => c.Supplier)
             .WithMany()

@@ -12,6 +12,7 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Reference).HasMaxLength(100);
+        builder.Property(x => x.Reason).HasMaxLength(200);
         builder.Property(x => x.Notes).HasMaxLength(1000);
         builder.Property(x => x.MovementType).HasConversion<string>().HasMaxLength(30);
 

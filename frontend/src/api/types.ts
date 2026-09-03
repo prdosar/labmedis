@@ -494,9 +494,50 @@ export interface StockMovementDto {
   quantity: number
   movementDate: string
   reference: string | null
+  reason: string | null
   notes: string | null
   createdAt: string
   updatedAt: string | null
+}
+
+// ─── SupplierReturn ──────────────────────────────────────────────────────────
+
+export interface SupplierReturnLineDto {
+  id: number
+  productId: number
+  productCode: string | null
+  productDesignation: string | null
+  purchaseLineId: number | null
+  lotNumber: string | null
+  warehouseId: number
+  warehouseName: string | null
+  quantityReturned: number
+  unitCostForeign: number
+  unitCostXof: number
+  lineTotalForeign: number
+  lineTotalXof: number
+  stockMovementId: number | null
+}
+
+export interface SupplierReturnDto {
+  id: number
+  reference: string
+  supplierId: number
+  supplierName: string
+  purchaseId: number | null
+  purchaseReference: string | null
+  returnDate: string
+  currency: string
+  exchangeRateToXof: number
+  totalAmountForeign: number
+  totalAmountXof: number
+  reason: string | null
+  notes: string | null
+  status: string
+  supplierCreditNoteId: number | null
+  supplierCreditNoteReference: string | null
+  createdAt: string
+  lines: SupplierReturnLineDto[]
 }
 
 // ─── Accounting ──────────────────────────────────────────────────────────────
@@ -800,6 +841,86 @@ export interface CustomerCreditNoteDto {
   resolvedAt: string | null
   createdAt: string
   lines: CustomerCreditNoteLineDto[]
+}
+
+// ─── Achats généraux ─────────────────────────────────────────────────────────
+
+export interface GeneralPurchaseDto {
+  id: number
+  dateAchat: string
+  reference: string | null
+  fournisseurNom: string
+  designation: string
+  categorie: string
+  montantHT: number
+  tauxTVA: number
+  montantTTC: number
+  modePaiement: string
+  estPaye: boolean
+  datePaiement: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string | null
+}
+
+// ─── Charges d'exploitation ──────────────────────────────────────────────────
+
+export interface OperatingExpenseDto {
+  id: number
+  date: string
+  categorie: string
+  description: string
+  montant: number
+  modePaiement: string
+  reference: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string | null
+}
+
+export interface ExpenseBudgetDto {
+  id: number
+  annee: number
+  mois: number
+  categorie: string
+  montantBudget: number
+}
+
+export interface BudgetVsActuelDto {
+  categorie: string
+  budget: number
+  realise: number
+  ecart: number
+  pctConsomme: number
+}
+
+// ─── Immobilisations & Amortissements ────────────────────────────────────────
+
+export interface DepreciationLineDto {
+  annee: number
+  baseAmortissable: number
+  dotationAnnuelle: number
+  cumulAmortissements: number
+  valeurNette: number
+}
+
+export interface FixedAssetDto {
+  id: number
+  code: string
+  designation: string
+  categorie: string
+  dateAcquisition: string
+  coutAcquisition: number
+  valeurResiduelle: number
+  dureeVieAns: number
+  methode: string
+  tauxLineaire: number
+  coefficientDegressif: number
+  status: string
+  notes: string | null
+  tableau: DepreciationLineDto[]
+  createdAt: string
+  updatedAt: string | null
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

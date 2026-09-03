@@ -1,4 +1,5 @@
 using LabMedis.Application.Dtos.StockMovements;
+using Microsoft.AspNetCore.Authorization;
 using LabMedis.Application.Services;
 using LabMedis.Domain.Common;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +37,13 @@ public class StockMovementsController : ControllerBase
     public async Task<ActionResult<StockMovementDto>> Create([FromBody] StockMovementCreateDto dto, CancellationToken ct)
     {
         var created = await _service.CreateAsync(dto, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpPost("diverse-exit")]
+    public async Task<ActionResult<StockMovementDto>> CreateDiverseExit([FromBody] DiverseExitCreateDto dto, CancellationToken ct)
+    {
+        var created = await _service.CreateDiverseExitAsync(dto, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 

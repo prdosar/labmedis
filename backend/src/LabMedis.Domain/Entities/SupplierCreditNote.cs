@@ -12,16 +12,21 @@ public class SupplierCreditNote : BaseEntity
     /// <summary>Référence unique : AVOIR-{année}-{séquence}</summary>
     public string Reference { get; set; } = string.Empty;
 
-    public long SupplierOrderId { get; set; }
+    /// <summary>Commande fournisseur d'origine — null pour les avoirs issus d'un retour manuel.</summary>
+    public long? SupplierOrderId { get; set; }
     public SupplierOrder? SupplierOrder { get; set; }
 
     /// <summary>Facture fournisseur d'origine (null si l'arrivage précède la réception de facture).</summary>
     public long? SupplierInvoiceId { get; set; }
     public SupplierInvoice? SupplierInvoice { get; set; }
 
-    /// <summary>Arrivage (Purchase) qui a déclenché la création de cet avoir.</summary>
-    public long PurchaseId { get; set; }
+    /// <summary>Arrivage (Purchase) qui a déclenché la création de cet avoir — null pour les retours manuels.</summary>
+    public long? PurchaseId { get; set; }
     public Purchase? Purchase { get; set; }
+
+    /// <summary>Retour fournisseur manuel à l'origine de cet avoir — null pour les avoirs de cartons perdus.</summary>
+    public long? SupplierReturnId { get; set; }
+    public SupplierReturn? SupplierReturn { get; set; }
 
     public long SupplierId { get; set; }
     public Supplier? Supplier { get; set; }

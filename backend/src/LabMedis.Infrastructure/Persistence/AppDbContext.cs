@@ -48,10 +48,17 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<SupplierProformaRejection> SupplierProformaRejections => Set<SupplierProformaRejection>();
     public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
     public DbSet<SupplierCreditNote> SupplierCreditNotes => Set<SupplierCreditNote>();
+    public DbSet<SupplierReturn> SupplierReturns => Set<SupplierReturn>();
+    public DbSet<SupplierReturnLine> SupplierReturnLines => Set<SupplierReturnLine>();
     public DbSet<CustomerCreditNote> CustomerCreditNotes => Set<CustomerCreditNote>();
     public DbSet<CustomerCreditNoteLine> CustomerCreditNoteLines => Set<CustomerCreditNoteLine>();
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
     public DbSet<SupplierInvoicePayment> SupplierInvoicePayments => Set<SupplierInvoicePayment>();
+    public DbSet<GeneralPurchase> GeneralPurchases => Set<GeneralPurchase>();
+    public DbSet<OperatingExpense> OperatingExpenses => Set<OperatingExpense>();
+    public DbSet<ExpenseBudget> ExpenseBudgets => Set<ExpenseBudget>();
+    public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
+    public DbSet<DepreciationLine> DepreciationLines => Set<DepreciationLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

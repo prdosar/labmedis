@@ -7,5 +7,6 @@ public enum StockMovementType
     Adjustment = 2,
     Return = 3,
     Loss = 4,
-    Transfer = 5
+    Transfer = 5,
+    SupplierReturn = 6
 }

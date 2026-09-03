@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   AccessDto,
+  BudgetVsActuelDto,
   CategoryDto,
   ChartAccountDto,
   CountryDto,
@@ -14,9 +15,14 @@ import type {
   CustomerStatsDto,
   CustomsRegimeDto,
   DeliveryDto,
+  DepreciationLineDto,
   DosageDto,
+  ExpenseBudgetDto,
+  FixedAssetDto,
+  GeneralPurchaseDto,
   InvoiceDto,
   JournalEntryDto,
+  OperatingExpenseDto,
   ManualJournalEntryInput,
   PackagingDto,
   PagedResult,
@@ -38,6 +44,7 @@ import type {
   SupplierOrderDocumentDto,
   SupplierOrderDto,
   SupplierOrderSummaryDto,
+  SupplierReturnDto,
   TherapeuticClassDto,
   ThirdPartyLedgerDto,
   TokenResponse,
@@ -283,6 +290,50 @@ export const stockMovementsApi = {
       expirationDate: string | null
     }[]
   }) => api.post<void>('/stock-movements/opening-inventory', dto),
+  createDiverseExit: (dto: {
+    productId: number
+    warehouseId: number
+    purchaseLineId: number | null
+    quantity: number
+    reason: string
+    notes: string | null
+    exitDate: string | null
+  }) => api.post<StockMovementDto>('/stock-movements/diverse-exit', dto),
+}
+
+// ─── SupplierReturns ─────────────────────────────────────────────────────────
+
+export const supplierReturnsApi = {
+  getAll: (params: { page?: number; size?: number; supplierId?: number }) => {
+    const qs = new URLSearchParams({
+      page: String(params.page ?? 1),
+      size: String(params.size ?? 20),
+    })
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    return api.get<PagedResult<SupplierReturnDto>>(`/supplier-returns?${qs}`)
+  },
+  getById: (id: number) => api.get<SupplierReturnDto>(`/supplier-returns/${id}`),
+  create: (dto: {
+    supplierId: number
+    purchaseId: number | null
+    returnDate: string
+    currency: string
+    exchangeRateToXof: number
+    reason: string | null
+    notes: string | null
+    createCreditNote: boolean
+    lines: {
+      productId: number
+      purchaseLineId: number | null
+      warehouseId: number
+      quantityReturned: number
+      lotNumber: string | null
+      unitCostForeign: number
+      unitCostXof: number
+    }[]
+  }) => api.post<SupplierReturnDto>('/supplier-returns', dto),
+  updateStatus: (id: number, status: string, notes?: string) =>
+    api.patch<SupplierReturnDto>(`/supplier-returns/${id}/status`, { status, notes }),
 }
 
 // ─── Accounting ──────────────────────────────────────────────────────────────
@@ -577,4 +628,49 @@ export const usersApi = {
   changePassword: (id: number, dto: { currentPassword: string; newPassword: string }) =>
     api.post(`/users/${id}/change-password`, dto),
   delete: (id: number) => api.delete(`/users/${id}`),
+}
+
+// ─── Achats généraux ─────────────────────────────────────────────────────────
+
+export const generalPurchasesApi = {
+  getAll: (page = 1, size = 20) =>
+    api.get<PagedResult<GeneralPurchaseDto>>(`/general-purchases?page=${page}&size=${size}`),
+  getById: (id: number) => api.get<GeneralPurchaseDto>(`/general-purchases/${id}`),
+  create: (dto: object) => api.post<GeneralPurchaseDto>('/general-purchases', dto),
+  update: (id: number, dto: object) => api.put<GeneralPurchaseDto>(`/general-purchases/${id}`, dto),
+  delete: (id: number) => api.delete(`/general-purchases/${id}`),
+  markPaid: (id: number, datePaiement: string) =>
+    api.post<GeneralPurchaseDto>(`/general-purchases/${id}/mark-paid`, { datePaiement }),
+}
+
+// ─── Charges d'exploitation ──────────────────────────────────────────────────
+
+export const operatingExpensesApi = {
+  getAll: (page = 1, size = 20, annee?: number, mois?: number) => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) })
+    if (annee) qs.set('annee', String(annee))
+    if (mois) qs.set('mois', String(mois))
+    return api.get<PagedResult<OperatingExpenseDto>>(`/operating-expenses?${qs}`)
+  },
+  getById: (id: number) => api.get<OperatingExpenseDto>(`/operating-expenses/${id}`),
+  create: (dto: object) => api.post<OperatingExpenseDto>('/operating-expenses', dto),
+  update: (id: number, dto: object) => api.put<OperatingExpenseDto>(`/operating-expenses/${id}`, dto),
+  delete: (id: number) => api.delete(`/operating-expenses/${id}`),
+  getBudgets: (annee: number, mois: number) =>
+    api.get<ExpenseBudgetDto[]>(`/operating-expenses/budgets?annee=${annee}&mois=${mois}`),
+  upsertBudget: (dto: object) => api.put<ExpenseBudgetDto>('/operating-expenses/budgets', dto),
+  getBudgetVsActuel: (annee: number, mois: number) =>
+    api.get<BudgetVsActuelDto[]>(`/operating-expenses/budget-vs-actuel?annee=${annee}&mois=${mois}`),
+}
+
+// ─── Immobilisations & Amortissements ────────────────────────────────────────
+
+export const fixedAssetsApi = {
+  getAll: (page = 1, size = 20) =>
+    api.get<PagedResult<FixedAssetDto>>(`/fixed-assets?page=${page}&size=${size}`),
+  getById: (id: number) => api.get<FixedAssetDto>(`/fixed-assets/${id}`),
+  create: (dto: object) => api.post<FixedAssetDto>('/fixed-assets', dto),
+  update: (id: number, dto: object) => api.put<FixedAssetDto>(`/fixed-assets/${id}`, dto),
+  delete: (id: number) => api.delete(`/fixed-assets/${id}`),
+  getTableau: (id: number) => api.get<DepreciationLineDto[]>(`/fixed-assets/${id}/tableau`),
 }

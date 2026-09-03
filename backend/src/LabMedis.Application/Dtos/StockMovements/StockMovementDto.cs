@@ -13,6 +13,7 @@ public record StockMovementDto(
     int Quantity,
     DateTime MovementDate,
     string? Reference,
+    string? Reason,
     string? Notes,
     DateTime CreatedAt,
     DateTime? UpdatedAt);
