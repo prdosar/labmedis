@@ -37,7 +37,8 @@ public class SupplierReturn : BaseEntity
 
     public void AddLine(SupplierReturnLine line)
     {
-        _lines.Add(line);
+        if (!_lines.Contains(line))
+            _lines.Add(line);
         RecomputeTotals();
     }
 

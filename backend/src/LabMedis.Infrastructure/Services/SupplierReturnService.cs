@@ -146,7 +146,9 @@ public class SupplierReturnService : BaseRepository<SupplierReturn>, ISupplierRe
             };
             line.ComputeAmounts();
 
-            DbContext.SupplierReturnLines.Add(line);
+            // AddLine() ajoute à _lines : EF sauvera la ligne via la navigation.
+            // Un DbContext.SupplierReturnLines.Add(line) supplémentaire provoquerait
+            // un double-comptage via la fixup EF (bug déjà rencontré sur CustomerCreditNote).
             supplierReturn.AddLine(line);
         }
 

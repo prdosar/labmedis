@@ -36,7 +36,8 @@ public class CustomerCreditNote : BaseEntity
 
     public void AddLine(CustomerCreditNoteLine line)
     {
-        _lines.Add(line);
+        if (!_lines.Contains(line))
+            _lines.Add(line);
         ComputeTotals();
     }
 

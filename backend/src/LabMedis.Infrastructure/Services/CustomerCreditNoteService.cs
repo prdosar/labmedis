@@ -143,7 +143,10 @@ public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICu
             await DbContext.SaveChangesAsync(ct);
 
             line.StockMovementId = movement.Id;
-            DbContext.CustomerCreditNoteLines.Add(line);
+            // Ne PAS faire DbContext.CustomerCreditNoteLines.Add(line) ici :
+            // AddLine() ajoute la ligne à _lines et EF la persistera via la navigation
+            // au SaveChanges suivant. L'ajout explicite provoquait la fixup EF à
+            // insérer la ligne dans _lines une seconde fois → totaux doublés.
             creditNote.AddLine(line);
         }
 
