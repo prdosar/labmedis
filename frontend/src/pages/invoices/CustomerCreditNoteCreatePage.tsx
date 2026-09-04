@@ -18,9 +18,6 @@ function fmtDate(s: string | null) {
   try { return new Date(s).toLocaleDateString('fr-FR') } catch { return s }
 }
 
-const inputCls =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white'
-
 // ─── Row types ────────────────────────────────────────────────────────────────
 
 // Ligne « retour lié à une facture » — la source vient de returnable-lines
@@ -94,7 +91,6 @@ export function CustomerCreditNoteCreatePage() {
   const [products, setProducts] = useState<ProductDto[]>([])
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>([])
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(null)
-  const [returnableLines, setReturnableLines] = useState<ReturnableInvoiceLineDto[]>([])
   const [loadingReturnable, setLoadingReturnable] = useState(false)
 
   // Lines
@@ -123,7 +119,6 @@ export function CustomerCreditNoteCreatePage() {
   useEffect(() => {
     if (!invoiceId) {
       setSelectedInvoice(null)
-      setReturnableLines([])
       setInvoiceRows([])
       return
     }
@@ -133,7 +128,6 @@ export function CustomerCreditNoteCreatePage() {
     setLoadingReturnable(true)
     invoicesApi.getReturnableLines(Number(invoiceId))
       .then(lines => {
-        setReturnableLines(lines)
         // Auto-populate rows: 1 row per invoice line still returnable, qty=0 (à cocher)
         const rows: InvoiceReturnRow[] = lines
           .filter(l => l.quantityReturnable > 0)
@@ -150,7 +144,7 @@ export function CustomerCreditNoteCreatePage() {
         setInvoiceRows(rows)
         setFreeRows([])
       })
-      .catch(() => setReturnableLines([]))
+      .catch(() => setInvoiceRows([]))
       .finally(() => setLoadingReturnable(false))
   }, [invoiceId, invoices])
 
