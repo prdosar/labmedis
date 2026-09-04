@@ -38,6 +38,7 @@ export function CustomerOrderPreparationPage() {
   const [order, setOrder] = useState<CustomerOrderDto | null>(null)
   const [suggestions, setSuggestions] = useState<CustomerOrderSuggestedLotDto[]>([])
   const [allocations, setAllocations] = useState<LotAllocation[][]>([])  // per order line
+  const [preparationDate, setPreparationDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -92,7 +93,7 @@ export function CustomerOrderPreparationPage() {
         purchaseLineId: l.purchaseLineId,
         quantityAllocated: parseInt(l.quantity) || 0,
       }))
-      const updated = await customerOrdersApi.prepare(Number(id), lots)
+      const updated = await customerOrdersApi.prepare(Number(id), lots, preparationDate || null)
       toast('Préparation confirmée.')
       navigate(`/orders/customers/${updated.id}`)
     } catch (e) {
@@ -127,10 +128,22 @@ export function CustomerOrderPreparationPage() {
       <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
         <Package size={15} className="mt-0.5 shrink-0 text-blue-500" />
         <span>
-          Les lots sont proposés par ordre de <strong>date d'expiration la plus proche</strong> (FIFO).
+          Les lots sont proposés par ordre de <strong>date d'expiration la plus proche</strong> (FEFO).
           Vous pouvez ajuster la répartition si un lot est inutilisable.
           La somme des quantités doit correspondre exactement à la quantité commandée.
         </span>
+      </div>
+
+      {/* Preparation date */}
+      <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
+        <label className="text-sm font-medium text-gray-700">Date de préparation</label>
+        <input
+          type="date"
+          value={preparationDate}
+          onChange={e => setPreparationDate(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
+        />
+        <span className="text-xs text-gray-400">Par défaut : aujourd'hui.</span>
       </div>
 
       {/* Per line */}

@@ -323,12 +323,14 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         }
 
         order.StartPreparation();
+        if (dto.PreparationDate.HasValue)
+            order.OrderDate = dto.PreparationDate.Value.Date;
         await DbContext.SaveChangesAsync(ct);
 
         return await GetByIdAsync(orderId, ct) ?? throw new InvalidOperationException();
     }
 
-    public async Task<CustomerOrderDto> CompleteAsync(long id, CancellationToken ct = default)
+    public async Task<CustomerOrderDto> CompleteAsync(long id, CompleteOrderDto? dto = null, CancellationToken ct = default)
     {
         var order = await DbSet
             .Include(o => o.Customer).ThenInclude(c => c!.ChartAccount)
@@ -337,75 +339,40 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             .FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new DomainException($"Commande introuvable (Id={id}).");
 
-        if (order.Status != CustomerOrderStatus.Validée && order.Status != CustomerOrderStatus.EnPréparation)
-            throw new DomainException("Seule une commande validée ou en préparation peut être clôturée.");
+        if (order.Status != CustomerOrderStatus.EnPréparation)
+            throw new DomainException("Seule une commande en préparation peut être clôturée. Passez d'abord par la préparation.");
+
+        var deliveryDate = dto?.DeliveryDate?.Date ?? DateTime.UtcNow.Date;
 
         // 1. Consume stock + create StockMovements
-        if (order.Status == CustomerOrderStatus.EnPréparation)
+        var lotLines = await DbContext.CustomerOrderLotLines
+            .Include(l => l.PurchaseLine)
+            .Where(l => l.CustomerOrderId == id && !l.IsDeleted)
+            .ToListAsync(ct);
+
+        if (!lotLines.Any())
+            throw new DomainException("Aucune ligne de préparation trouvée. Relancez la préparation.");
+
+        foreach (var lotLine in lotLines)
         {
-            var lotLines = await DbContext.CustomerOrderLotLines
-                .Include(l => l.PurchaseLine)
-                .Where(l => l.CustomerOrderId == id && !l.IsDeleted)
-                .ToListAsync(ct);
-
-            if (!lotLines.Any())
-                throw new DomainException("Aucune ligne de préparation trouvée. Relancez la préparation.");
-
-            foreach (var lotLine in lotLines)
+            lotLine.PurchaseLine!.ConsumeStock(lotLine.QuantityAllocated);
+            DbContext.StockMovements.Add(new StockMovement
             {
-                lotLine.PurchaseLine!.ConsumeStock(lotLine.QuantityAllocated);
-                DbContext.StockMovements.Add(new StockMovement
-                {
-                    ProductId = lotLine.ProductId,
-                    WarehouseId = lotLine.WarehouseId,
-                    PurchaseLineId = lotLine.PurchaseLineId,
-                    MovementType = StockMovementType.SaleExit,
-                    Quantity = -lotLine.QuantityAllocated,
-                    MovementDate = DateTime.UtcNow,
-                    Reference = order.Reference,
-                    Notes = $"Vente – {order.Customer?.Name}"
-                });
-            }
-        }
-        else
-        {
-            foreach (var line in order.Lines)
-            {
-                var lots = await DbContext.PurchaseLines
-                    .Where(pl => pl.ProductId == line.ProductId && !pl.IsDeleted && pl.QuantityRemaining > 0)
-                    .OrderBy(pl => pl.ExpirationDate == null ? 1 : 0)
-                    .ThenBy(pl => pl.ExpirationDate)
-                    .ThenBy(pl => pl.Id)
-                    .ToListAsync(ct);
-
-                int remaining = line.Quantity;
-                foreach (var lot in lots)
-                {
-                    if (remaining <= 0) break;
-                    int consume = Math.Min(remaining, lot.QuantityRemaining);
-                    lot.ConsumeStock(consume);
-                    DbContext.StockMovements.Add(new StockMovement
-                    {
-                        ProductId = line.ProductId,
-                        WarehouseId = line.Product!.WarehouseId,
-                        PurchaseLineId = lot.Id,
-                        MovementType = StockMovementType.SaleExit,
-                        Quantity = -consume,
-                        MovementDate = DateTime.UtcNow,
-                        Reference = order.Reference,
-                        Notes = $"Vente – {order.Customer?.Name}"
-                    });
-                    remaining -= consume;
-                }
-
-                if (remaining > 0)
-                    throw new DomainException(
-                        $"Stock insuffisant pour '{line.Product?.Designation}' lors de la clôture.");
-            }
+                ProductId = lotLine.ProductId,
+                WarehouseId = lotLine.WarehouseId,
+                PurchaseLineId = lotLine.PurchaseLineId,
+                MovementType = StockMovementType.SaleExit,
+                Quantity = -lotLine.QuantityAllocated,
+                MovementDate = deliveryDate,
+                Reference = order.Reference,
+                Notes = $"Vente – {order.Customer?.Name}"
+            });
         }
 
         // 2. Issue Invoice
         order.Invoice?.Issue();
+        if (order.Invoice is not null && dto?.DeliveryDate.HasValue == true)
+            order.Invoice.InvoiceDate = deliveryDate;
 
         // 3. Accounting entries
         await PostSaleAccountingAsync(order, ct);

@@ -56,8 +56,8 @@ public class CustomerOrdersController : ControllerBase
         => Ok(await _service.PrepareAsync(id, dto, ct));
 
     [HttpPost("{id:long}/complete")]
-    public async Task<ActionResult<CustomerOrderDto>> Complete(long id, CancellationToken ct)
-        => Ok(await _service.CompleteAsync(id, ct));
+    public async Task<ActionResult<CustomerOrderDto>> Complete(long id, [FromBody] CompleteOrderDto? dto, CancellationToken ct)
+        => Ok(await _service.CompleteAsync(id, dto, ct));
 
     [HttpPost("{id:long}/cancel")]
     public async Task<ActionResult<CustomerOrderDto>> Cancel(long id, CancellationToken ct)

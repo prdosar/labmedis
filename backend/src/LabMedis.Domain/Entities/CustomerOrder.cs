@@ -52,8 +52,8 @@ public class CustomerOrder : BaseEntity
 
     public void Complete()
     {
-        if (Status != CustomerOrderStatus.Validée && Status != CustomerOrderStatus.EnPréparation)
-            throw new DomainException("Seule une commande validée ou en préparation peut être clôturée.");
+        if (Status != CustomerOrderStatus.EnPréparation)
+            throw new DomainException("Seule une commande en préparation peut être clôturée. Passez d'abord par la préparation (allocation des lots).");
         Status = CustomerOrderStatus.Terminée;
     }
 

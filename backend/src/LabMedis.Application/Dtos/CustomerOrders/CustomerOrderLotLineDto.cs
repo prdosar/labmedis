@@ -28,6 +28,10 @@ public record SuggestedLotItemDto(
     int AvailableStock,
     int SuggestedQuantity);
 
-public record PrepareOrderDto(IReadOnlyList<PrepareLotInputDto> Lots);
+public record PrepareOrderDto(
+    IReadOnlyList<PrepareLotInputDto> Lots,
+    DateTime? PreparationDate = null);
 
 public record PrepareLotInputDto(long OrderLineId, long PurchaseLineId, int QuantityAllocated);
+
+public record CompleteOrderDto(DateTime? DeliveryDate = null);

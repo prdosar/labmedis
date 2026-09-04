@@ -52,6 +52,8 @@ function PrintHeader({ title, reference, date }: { title: string; reference: str
           <div style={{ fontWeight: 'bold', fontSize: '14pt', color: '#1a1a1a' }}>LABMEDIS SARL</div>
           <div style={{ fontSize: '8pt', color: '#666' }}>QAT. GBOSSIME, 380 RUE BD DE LA KARA</div>
           <div style={{ fontSize: '8pt', color: '#666' }}>08 BP 80859 — LOMÉ, Togo</div>
+          <div style={{ fontSize: '8pt', color: '#666', marginTop: '3px' }}>Tél : +228 92 26 99 33 / +228 72 14 08 47</div>
+          <div style={{ fontSize: '8pt', color: '#666' }}>Email : pharmacien@labmedis-togo.com</div>
         </div>
       </div>
       {/* Document title */}

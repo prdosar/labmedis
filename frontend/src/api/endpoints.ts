@@ -431,9 +431,10 @@ export const customerOrdersApi = {
   validate: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/validate`),
   getSuggestedLots: (id: number) =>
     api.get<CustomerOrderSuggestedLotDto[]>(`/customer-orders/${id}/suggested-lots`),
-  prepare: (id: number, lots: { orderLineId: number; purchaseLineId: number; quantityAllocated: number }[]) =>
-    api.post<CustomerOrderDto>(`/customer-orders/${id}/prepare`, { lots }),
-  complete: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/complete`),
+  prepare: (id: number, lots: { orderLineId: number; purchaseLineId: number; quantityAllocated: number }[], preparationDate?: string | null) =>
+    api.post<CustomerOrderDto>(`/customer-orders/${id}/prepare`, { lots, preparationDate: preparationDate ?? null }),
+  complete: (id: number, deliveryDate?: string | null) =>
+    api.post<CustomerOrderDto>(`/customer-orders/${id}/complete`, { deliveryDate: deliveryDate ?? null }),
   cancel: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/cancel`),
   preview: (dto: { vatApplied: boolean; lines: { productId: number; quantity: number }[] }) =>
     api.post<CustomerOrderPreviewDto>('/customer-orders/preview', dto),

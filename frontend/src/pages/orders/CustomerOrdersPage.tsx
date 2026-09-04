@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, CheckCircle, XCircle, CheckCheck, Search, X } from 'lucide-react'
+import { Plus, Eye, CheckCircle, XCircle, CheckCheck, Search, X, Package } from 'lucide-react'
 import type { CustomerOrderSummaryDto } from '../../api/types'
 import { customerOrdersApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -9,7 +9,7 @@ import { ApiError } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { Pagination } from '../../components/ui/Pagination'
 import { Button } from '../../components/ui/Button'
-import { ConfirmDialog } from '../../components/ui/Modal'
+import { ConfirmDialog, Modal } from '../../components/ui/Modal'
 import { fmtXof } from '../../utils/format'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,7 +50,9 @@ export function CustomerOrdersPage() {
     r.customerName.toLowerCase().includes(search.toLowerCase()),
   )
 
-  const [confirmAction, setConfirmAction] = useState<{ order: CustomerOrderSummaryDto; action: 'validate' | 'complete' | 'cancel' } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ order: CustomerOrderSummaryDto; action: 'validate' | 'cancel' } | null>(null)
+  const [completeTarget, setCompleteTarget] = useState<CustomerOrderSummaryDto | null>(null)
+  const [deliveryDate, setDeliveryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [acting, setActing] = useState(false)
 
   async function handleConfirmAction() {
@@ -59,13 +61,6 @@ export function CustomerOrdersPage() {
     try {
       const { order, action } = confirmAction
       if (action === 'validate') await customerOrdersApi.validate(order.id)
-      else if (action === 'complete') {
-        await customerOrdersApi.complete(order.id)
-        toast('Commande clôturée.', 'success')
-        setConfirmAction(null)
-        navigate(`/orders/customers/${order.id}`)
-        return
-      }
       else await customerOrdersApi.cancel(order.id)
       toast(action === 'cancel' ? 'Commande annulée.' : 'Commande validée.', action === 'cancel' ? 'info' : 'success')
       setConfirmAction(null)
@@ -77,9 +72,23 @@ export function CustomerOrdersPage() {
     }
   }
 
+  async function handleComplete() {
+    if (!completeTarget) return
+    setActing(true)
+    try {
+      await customerOrdersApi.complete(completeTarget.id, deliveryDate || null)
+      toast('Commande clôturée et livrée.', 'success')
+      setCompleteTarget(null)
+      navigate(`/orders/customers/${completeTarget.id}`)
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur.', 'error')
+    } finally {
+      setActing(false)
+    }
+  }
+
   const confirmMessages = {
     validate: (name: string) => `Valider la commande ${name} et générer une facture brouillon ?`,
-    complete: (name: string) => `Clôturer la commande ${name} ? Le stock sera déduit et les écritures comptables passées.`,
     cancel: (name: string) => `Annuler la commande ${name} ?`,
   }
 
@@ -200,10 +209,19 @@ export function CustomerOrdersPage() {
                     <CheckCircle size={14} />
                   </button>
                 )}
-                {(row.status === 'Validée' || row.status === 'EnPréparation') && (
+                {row.status === 'Validée' && (
                   <button
-                    title="Clôturer (livré)"
-                    onClick={() => setConfirmAction({ order: row, action: 'complete' })}
+                    title="Préparer la commande (choisir les lots)"
+                    onClick={() => navigate(`/orders/customers/${row.id}/prepare`)}
+                    className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                  >
+                    <Package size={14} />
+                  </button>
+                )}
+                {row.status === 'EnPréparation' && (
+                  <button
+                    title="Clôturer (livrer)"
+                    onClick={() => { setCompleteTarget(row); setDeliveryDate(new Date().toISOString().slice(0, 10)) }}
                     className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                   >
                     <CheckCheck size={14} />
@@ -236,19 +254,49 @@ export function CustomerOrdersPage() {
         isOpen={!!confirmAction}
         onClose={() => setConfirmAction(null)}
         onConfirm={handleConfirmAction}
-        title={
-          confirmAction?.action === 'validate' ? 'Valider la commande' :
-          confirmAction?.action === 'complete' ? 'Clôturer la commande' :
-          'Annuler la commande'
-        }
+        title={confirmAction?.action === 'validate' ? 'Valider la commande' : 'Annuler la commande'}
         message={confirmAction ? confirmMessages[confirmAction.action](confirmAction.order.reference) : ''}
         loading={acting}
-        confirmLabel={
-          confirmAction?.action === 'cancel' ? 'Annuler la commande' :
-          confirmAction?.action === 'validate' ? 'Valider' : 'Clôturer'
-        }
+        confirmLabel={confirmAction?.action === 'cancel' ? 'Annuler la commande' : 'Valider'}
         confirmVariant={confirmAction?.action === 'cancel' ? 'danger' : 'primary'}
       />
+
+      <Modal
+        isOpen={!!completeTarget}
+        onClose={() => setCompleteTarget(null)}
+        title="Clôturer la commande"
+        size="sm"
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Clôturer <span className="font-semibold">{completeTarget?.reference}</span> ? Le stock sera déduit selon les lots préparés et les écritures comptables passées.
+        </p>
+        <div className="mb-6">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Date de livraison</label>
+          <input
+            type="date"
+            value={deliveryDate}
+            onChange={e => setDeliveryDate(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
+          />
+          <p className="mt-1 text-xs text-gray-400">Utilisée pour la date des mouvements de stock et la facture émise.</p>
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => setCompleteTarget(null)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleComplete}
+            disabled={acting || !deliveryDate}
+            className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2"
+          >
+            {acting && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Clôturer et livrer
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
