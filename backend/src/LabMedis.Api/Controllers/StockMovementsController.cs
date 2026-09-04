@@ -15,8 +15,20 @@ public class StockMovementsController : ControllerBase
     public StockMovementsController(IStockMovementService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<StockMovementDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<StockMovementDto>>> GetAll(
+        [FromQuery] int page = 1, [FromQuery] int size = 10,
+        [FromQuery] long? productId = null, [FromQuery] long? warehouseId = null,
+        [FromQuery] string? movementType = null,
+        [FromQuery] DateTime? dateFrom = null, [FromQuery] DateTime? dateTo = null,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, productId, warehouseId, movementType, dateFrom, dateTo, ct));
+
+    [HttpPost("{id:long}/cancel")]
+    public async Task<IActionResult> Cancel(long id, CancellationToken ct)
+    {
+        await _service.CancelAsync(id, ct);
+        return NoContent();
+    }
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<StockMovementDto>> GetById(long id, CancellationToken ct)

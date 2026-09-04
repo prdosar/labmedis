@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { stockMovementsApi, productsApi, warehousesApi } from '../../api/endpoints'
-import type { StockMovementDto, ProductDto, WarehouseDto } from '../../api/types'
+import type { StockMovementDto, ProductDto, WarehouseDto, PurchaseLineLotDto } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import type { BadgeVariant } from '../../components/ui/Badge'
@@ -61,8 +61,11 @@ export function DiverseExitsPage() {
   // Form state
   const [products, setProducts] = useState<ProductDto[]>([])
   const [warehouses, setWarehouses] = useState<WarehouseDto[]>([])
+  const [lots, setLots] = useState<PurchaseLineLotDto[]>([])
+  const [loadingLots, setLoadingLots] = useState(false)
   const [productId, setProductId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
+  const [purchaseLineId, setPurchaseLineId] = useState('')
   const [quantity, setQuantity] = useState('')
   const [reason, setReason] = useState('')
   const [customReason, setCustomReason] = useState('')
@@ -98,9 +101,21 @@ export function DiverseExitsPage() {
     })
   }, [showForm])
 
+  // Load lots when product changes
+  useEffect(() => {
+    if (!productId) { setLots([]); setPurchaseLineId(''); return }
+    setLoadingLots(true)
+    productsApi.getLots(Number(productId))
+      .then(setLots)
+      .finally(() => setLoadingLots(false))
+    setPurchaseLineId('')
+  }, [productId])
+
   const openForm = () => {
     setProductId('')
     setWarehouseId('')
+    setPurchaseLineId('')
+    setLots([])
     setQuantity('')
     setReason('')
     setCustomReason('')
@@ -113,15 +128,21 @@ export function DiverseExitsPage() {
     const finalReason = reason === 'Autre' ? customReason.trim() : reason
     if (!productId) return toast('Sélectionnez un produit.', 'error')
     if (!warehouseId) return toast('Sélectionnez un entrepôt.', 'error')
+    if (!purchaseLineId) return toast('Sélectionnez le lot concerné.', 'error')
     if (!quantity || Number(quantity) <= 0) return toast('Quantité invalide.', 'error')
     if (!finalReason) return toast('Le motif est obligatoire.', 'error')
+
+    const selectedLot = lots.find(l => String(l.id) === purchaseLineId)
+    if (selectedLot && Number(quantity) > selectedLot.quantityRemaining) {
+      return toast(`Stock insuffisant sur le lot ${selectedLot.lotNumber} (${selectedLot.quantityRemaining} dispo).`, 'error')
+    }
 
     setSaving(true)
     try {
       await stockMovementsApi.createDiverseExit({
         productId: Number(productId),
         warehouseId: Number(warehouseId),
-        purchaseLineId: null,
+        purchaseLineId: Number(purchaseLineId),
         quantity: Number(quantity),
         reason: finalReason,
         notes: notes || null,
@@ -139,6 +160,10 @@ export function DiverseExitsPage() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  const selectedLot = lots.find(l => String(l.id) === purchaseLineId) ?? null
+  const quantityNum = Number(quantity) || 0
+  const finalStock = selectedLot ? selectedLot.quantityRemaining - quantityNum : 0
 
   return (
     <div className="p-6 space-y-6">
@@ -183,6 +208,38 @@ export function DiverseExitsPage() {
               />
             </div>
 
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Lot concerné *
+                {productId && !loadingLots && lots.length === 0 && (
+                  <span className="ml-2 text-red-500 font-normal">Aucun lot en stock pour ce produit.</span>
+                )}
+              </label>
+              <ComboSelect
+                value={purchaseLineId}
+                onChange={setPurchaseLineId}
+                options={lots.map(l => ({
+                  value: String(l.id),
+                  label: `${l.lotNumber} — Reste ${l.quantityRemaining}${l.expirationDate ? ` — Exp. ${new Date(l.expirationDate).toLocaleDateString('fr-FR')}` : ''}`,
+                }))}
+                placeholder={
+                  !productId ? 'Sélectionnez d\'abord un produit…' :
+                  loadingLots ? 'Chargement des lots…' :
+                  lots.length === 0 ? 'Aucun lot disponible' :
+                  'Rechercher un lot…'
+                }
+                disabled={!productId || loadingLots || lots.length === 0}
+              />
+              {selectedLot && (
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Stock actuel du lot : <span className="font-semibold text-gray-800">{selectedLot.quantityRemaining}</span>
+                  {selectedLot.expirationDate && (
+                    <> · Expire le <span className="font-medium">{new Date(selectedLot.expirationDate).toLocaleDateString('fr-FR')}</span></>
+                  )}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Quantité sortie *</label>
               <Input
@@ -192,6 +249,12 @@ export function DiverseExitsPage() {
                 onChange={e => setQuantity(e.target.value)}
                 placeholder="0"
               />
+              {selectedLot && quantityNum > 0 && (
+                <p className={`mt-1.5 text-xs ${finalStock < 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                  Stock final après sortie : <span className="font-semibold">{finalStock}</span>
+                  {finalStock < 0 && <span className="ml-2">⚠ Quantité supérieure au stock disponible</span>}
+                </p>
+              )}
             </div>
 
             <div>
@@ -255,6 +318,7 @@ export function DiverseExitsPage() {
               <tr>
                 <th className="px-4 py-3 text-left">Produit</th>
                 <th className="px-4 py-3 text-left">Entrepôt</th>
+                <th className="px-4 py-3 text-left">Lot</th>
                 <th className="px-4 py-3 text-left">Date</th>
                 <th className="px-4 py-3 text-right">Quantité</th>
                 <th className="px-4 py-3 text-left">Motif</th>
@@ -270,6 +334,12 @@ export function DiverseExitsPage() {
                     <div className="text-xs text-gray-500 truncate max-w-xs">{item.productDesignation}</div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{item.warehouseName ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    {item.lotNumber
+                      ? <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{item.lotNumber}</span>
+                      : <span className="text-gray-300">—</span>
+                    }
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{fmtDate(item.movementDate)}</td>
                   <td className="px-4 py-3 text-right font-semibold text-red-600">{Math.abs(item.quantity)}</td>
                   <td className="px-4 py-3 text-gray-700">{item.reason ?? '—'}</td>

@@ -277,6 +277,46 @@ public class ProductService : BaseRepository<Product>, IProductService
     public Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default)
         => base.RestoreAsync(id, cancellationToken);
 
+    public async Task<IReadOnlyList<PurchaseLineLotDto>> GetAvailableLotsAsync(long productId, long? warehouseId = null, CancellationToken cancellationToken = default)
+    {
+        var query = DbContext.PurchaseLines
+            .Where(pl => pl.ProductId == productId && pl.QuantityRemaining > 0);
+
+        if (warehouseId.HasValue)
+        {
+            var warehouseLotIds = await DbContext.StockMovements
+                .Where(sm => sm.WarehouseId == warehouseId.Value && sm.PurchaseLineId != null)
+                .Select(sm => sm.PurchaseLineId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            query = query.Where(pl => warehouseLotIds.Contains(pl.Id));
+        }
+
+        var lots = await query
+            .OrderBy(pl => pl.ExpirationDate ?? DateTime.MaxValue)
+            .ThenBy(pl => pl.Id)
+            .Select(pl => new
+            {
+                pl.Id,
+                pl.LotNumber,
+                pl.ExpirationDate,
+                pl.QuantityRemaining,
+                WarehouseId = pl.StockMovements
+                    .OrderBy(sm => sm.MovementDate)
+                    .Select(sm => (long?)sm.WarehouseId)
+                    .FirstOrDefault(),
+                WarehouseName = pl.StockMovements
+                    .OrderBy(sm => sm.MovementDate)
+                    .Select(sm => sm.Warehouse!.Name)
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+
+        return lots.Select(l => new PurchaseLineLotDto(
+            l.Id, l.LotNumber, l.ExpirationDate, l.QuantityRemaining,
+            l.WarehouseId ?? 0, l.WarehouseName)).ToList();
+    }
+
     private async Task<string> GenerateCodeAsync(long? originCountryId, long supplierId, long warehouseId, long? excludeId, CancellationToken ct)
     {
         var countryCode = originCountryId is not null

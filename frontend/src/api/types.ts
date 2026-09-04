@@ -239,6 +239,15 @@ export interface CustomerStatsDto {
 
 // ─── Product ─────────────────────────────────────────────────────────────────
 
+export interface PurchaseLineLotDto {
+  id: number
+  lotNumber: string
+  expirationDate: string | null
+  quantityRemaining: number
+  warehouseId: number
+  warehouseName: string | null
+}
+
 export interface ProductDto {
   id: number
   code: string

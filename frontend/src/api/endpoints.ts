@@ -33,6 +33,7 @@ import type {
   PurchaseChargeDto,
   PurchaseDto,
   PurchaseLineDto,
+  PurchaseLineLotDto,
   PurchaseSummaryDto,
   SimpleEntity,
   StockMovementDto,
@@ -198,6 +199,10 @@ export const productsApi = {
   delete: (id: number) => api.delete(`/products/${id}`),
   restore: (id: number) => api.post(`/products/${id}/restore`),
   getHistory: (id: number) => api.get<ProductHistoryDto>(`/products/${id}/history`),
+  getLots: (id: number, warehouseId?: number) => {
+    const qs = warehouseId ? `?warehouseId=${warehouseId}` : ''
+    return api.get<PurchaseLineLotDto[]>(`/products/${id}/lots${qs}`)
+  },
 }
 
 // ─── Purchase ────────────────────────────────────────────────────────────────
@@ -267,8 +272,22 @@ export const deliveriesApi = {
 // ─── StockMovements ──────────────────────────────────────────────────────────
 
 export const stockMovementsApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<StockMovementDto>>(`/stock-movements?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, filters?: {
+    productId?: number
+    warehouseId?: number
+    movementType?: string
+    dateFrom?: string
+    dateTo?: string
+  }) => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) })
+    if (filters?.productId) qs.set('productId', String(filters.productId))
+    if (filters?.warehouseId) qs.set('warehouseId', String(filters.warehouseId))
+    if (filters?.movementType) qs.set('movementType', filters.movementType)
+    if (filters?.dateFrom) qs.set('dateFrom', filters.dateFrom)
+    if (filters?.dateTo) qs.set('dateTo', filters.dateTo)
+    return api.get<PagedResult<StockMovementDto>>(`/stock-movements?${qs}`)
+  },
+  cancel: (id: number) => api.post<void>(`/stock-movements/${id}/cancel`),
   getByProduct: (productId: number, page = 1, size = 10) =>
     api.get<PagedResult<StockMovementDto>>(
       `/stock-movements/by-product/${productId}?page=${page}&size=${size}`,

@@ -35,6 +35,11 @@ public class ProductsController : ControllerBase
         return item is null ? NotFound() : Ok(item);
     }
 
+    [HttpGet("{id:long}/lots")]
+    public async Task<ActionResult<IReadOnlyList<PurchaseLineLotDto>>> GetAvailableLots(
+        long id, [FromQuery] long? warehouseId = null, CancellationToken ct = default)
+        => Ok(await _service.GetAvailableLotsAsync(id, warehouseId, ct));
+
     [HttpPost]
     public async Task<ActionResult<ProductDto>> Create([FromBody] ProductCreateDto dto, CancellationToken ct)
     {

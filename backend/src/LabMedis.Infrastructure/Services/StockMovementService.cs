@@ -19,18 +19,59 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         _logger = logger;
     }
 
-    public async Task<PagedResult<StockMovementDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<StockMovementDto>> GetAllAsync(
+        int page = 1, int size = 10,
+        long? productId = null, long? warehouseId = null,
+        string? movementType = null,
+        DateTime? dateFrom = null, DateTime? dateTo = null,
+        CancellationToken cancellationToken = default)
     {
+        var q = DbSet.AsQueryable();
+        if (productId.HasValue) q = q.Where(m => m.ProductId == productId.Value);
+        if (warehouseId.HasValue) q = q.Where(m => m.WarehouseId == warehouseId.Value);
+        if (!string.IsNullOrWhiteSpace(movementType) &&
+            Enum.TryParse<StockMovementType>(movementType, ignoreCase: true, out var mt))
+            q = q.Where(m => m.MovementType == mt);
+        if (dateFrom.HasValue) q = q.Where(m => m.MovementDate >= dateFrom.Value.Date);
+        if (dateTo.HasValue) q = q.Where(m => m.MovementDate < dateTo.Value.Date.AddDays(1));
+
         var skip = (page - 1) * size;
-        var total = await DbSet.CountAsync(cancellationToken);
-        var items = await DbSet
+        var total = await q.CountAsync(cancellationToken);
+        var items = await q
             .Include(m => m.Product)
             .Include(m => m.Warehouse)
             .Include(m => m.PurchaseLine)
             .OrderByDescending(m => m.MovementDate)
+            .ThenByDescending(m => m.Id)
             .Skip(skip).Take(size)
             .ToListAsync(cancellationToken);
         return new PagedResult<StockMovementDto>(items.Select(ToDto).ToList(), total, page, size);
+    }
+
+    public async Task CancelAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var movement = await DbSet
+            .Include(m => m.PurchaseLine)
+            .FirstOrDefaultAsync(m => m.Id == id, cancellationToken)
+            ?? throw new DomainException($"Mouvement introuvable (Id={id}).");
+
+        var isManualExit = movement.MovementType == StockMovementType.Loss
+                        || movement.MovementType == StockMovementType.Adjustment;
+        if (!isManualExit)
+            throw new DomainException(
+                "Seuls les mouvements manuels (Perte, Ajustement) peuvent être annulés depuis cette page. " +
+                "Pour les autres, annulez le document parent (facture, commande, retour).");
+
+        if (movement.PurchaseLine is not null)
+        {
+            movement.PurchaseLine.ReleaseStock(movement.Quantity);
+            DbContext.PurchaseLines.Update(movement.PurchaseLine);
+        }
+
+        DbSet.Remove(movement);
+        await DbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Mouvement de stock annulé Id={Id} Type={Type} Qty={Qty}",
+            movement.Id, movement.MovementType, movement.Quantity);
     }
 
     public async Task<PagedResult<StockMovementDto>> GetByProductAsync(long productId, int page = 1, int size = 10, CancellationToken cancellationToken = default)
@@ -121,26 +162,25 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         if (!await DbContext.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId, cancellationToken))
             throw new DomainException($"Magasin introuvable (Id={dto.WarehouseId}).");
 
-        PurchaseLine? purchaseLine = null;
-        if (dto.PurchaseLineId.HasValue)
-        {
-            purchaseLine = await DbContext.PurchaseLines
-                .FirstOrDefaultAsync(l => l.Id == dto.PurchaseLineId, cancellationToken)
-                ?? throw new DomainException($"Ligne d'arrivage introuvable (Id={dto.PurchaseLineId}).");
+        if (!dto.PurchaseLineId.HasValue)
+            throw new DomainException("Le lot est obligatoire pour une sortie de stock.");
 
-            if (purchaseLine.ProductId != dto.ProductId)
-                throw new DomainException("La ligne d'arrivage ne correspond pas au produit sélectionné.");
+        var purchaseLine = await DbContext.PurchaseLines
+            .FirstOrDefaultAsync(l => l.Id == dto.PurchaseLineId, cancellationToken)
+            ?? throw new DomainException($"Ligne d'arrivage introuvable (Id={dto.PurchaseLineId}).");
 
-            if (purchaseLine.QuantityRemaining < dto.Quantity)
-                throw new DomainException(
-                    $"Stock insuffisant : disponible={purchaseLine.QuantityRemaining}, demandé={dto.Quantity}.");
-
-            purchaseLine.ConsumeStock(dto.Quantity);
-            DbContext.PurchaseLines.Update(purchaseLine);
-        }
+        if (purchaseLine.ProductId != dto.ProductId)
+            throw new DomainException("La ligne d'arrivage ne correspond pas au produit sélectionné.");
 
         if (dto.Quantity <= 0)
             throw new DomainException("La quantité doit être strictement positive.");
+
+        if (purchaseLine.QuantityRemaining < dto.Quantity)
+            throw new DomainException(
+                $"Stock insuffisant sur le lot '{purchaseLine.LotNumber}' : disponible={purchaseLine.QuantityRemaining}, demandé={dto.Quantity}.");
+
+        purchaseLine.ConsumeStock(dto.Quantity);
+        DbContext.PurchaseLines.Update(purchaseLine);
 
         var reasonLower = dto.Reason.ToLowerInvariant();
         var movementType = reasonLower.Contains("ajustement") || reasonLower.Contains("inventaire")

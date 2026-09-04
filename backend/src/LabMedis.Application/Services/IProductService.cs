@@ -13,4 +13,5 @@ public interface IProductService
     Task<ProductDto?> UpdateAsync(long id, ProductUpdateDto dto, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
     Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PurchaseLineLotDto>> GetAvailableLotsAsync(long productId, long? warehouseId = null, CancellationToken cancellationToken = default);
 }
