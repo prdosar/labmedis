@@ -260,6 +260,31 @@ export interface PurchaseLineLotDto {
   warehouseName: string | null
 }
 
+export interface ReturnableLotDto {
+  purchaseLineId: number
+  lotNumber: string
+  expirationDate: string | null
+  warehouseId: number
+  warehouseName: string | null
+  quantityDelivered: number
+  quantityAlreadyReturned: number
+  quantityReturnable: number
+}
+
+export interface ReturnableInvoiceLineDto {
+  invoiceLineId: number
+  productId: number
+  productCode: string
+  productDesignation: string
+  quantityInvoiced: number
+  quantityAlreadyReturned: number
+  quantityReturnable: number
+  unitPriceHt: number
+  discountPercent: number
+  tvaRate: number
+  availableLots: ReturnableLotDto[]
+}
+
 export interface ProductDto {
   id: number
   code: string

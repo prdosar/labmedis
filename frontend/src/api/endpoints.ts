@@ -36,6 +36,7 @@ import type {
   PurchaseLineLotDto,
   PurchaseSummaryDto,
   DelayDto,
+  ReturnableInvoiceLineDto,
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
@@ -244,6 +245,8 @@ function buildPaymentForm(data: PaymentFormData): FormData {
 }
 
 export const invoicesApi = {
+  getReturnableLines: (id: number) =>
+    api.get<ReturnableInvoiceLineDto[]>(`/invoices/${id}/returnable-lines`),
   getAll: (page = 1, size = 10) =>
     api.get<PagedResult<InvoiceDto>>(`/invoices?page=${page}&size=${size}`),
   getById: (id: number) => api.get<InvoiceDto>(`/invoices/${id}`),

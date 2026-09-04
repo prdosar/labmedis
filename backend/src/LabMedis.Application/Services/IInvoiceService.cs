@@ -18,4 +18,5 @@ public interface IInvoiceService
     Task<InvoiceDto?> IssueAsync(long id, CancellationToken cancellationToken = default);
     Task<InvoiceDto?> RegisterPaymentAsync(long id, RegisterPaymentDto dto, Stream? attachmentStream, string? attachmentFileName, CancellationToken cancellationToken = default);
     Task<InvoiceDto?> CancelAsync(long id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReturnableInvoiceLineDto>> GetReturnableLinesAsync(long invoiceId, CancellationToken cancellationToken = default);
 }

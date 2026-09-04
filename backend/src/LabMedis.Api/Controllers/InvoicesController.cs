@@ -24,6 +24,10 @@ public class InvoicesController : ControllerBase
         return item is null ? NotFound() : Ok(item);
     }
 
+    [HttpGet("{id:long}/returnable-lines")]
+    public async Task<ActionResult<IReadOnlyList<ReturnableInvoiceLineDto>>> GetReturnableLines(long id, CancellationToken ct)
+        => Ok(await _service.GetReturnableLinesAsync(id, ct));
+
     [HttpPost]
     public async Task<ActionResult<InvoiceDto>> Create([FromBody] InvoiceCreateDto dto, CancellationToken ct)
     {

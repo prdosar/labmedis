@@ -263,6 +263,70 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         return ToDto(invoice);
     }
 
+    public async Task<IReadOnlyList<ReturnableInvoiceLineDto>> GetReturnableLinesAsync(long invoiceId, CancellationToken ct = default)
+    {
+        var invoice = await DbSet
+            .Include(i => i.Lines).ThenInclude(l => l.Product)
+            .FirstOrDefaultAsync(i => i.Id == invoiceId, ct)
+            ?? throw new DomainException($"Facture introuvable (Id={invoiceId}).");
+
+        // Trouver la commande liée à cette facture (via InvoiceId sur CustomerOrder)
+        var order = await DbContext.CustomerOrders
+            .Include(o => o.LotLines).ThenInclude(ll => ll.PurchaseLine)
+            .Include(o => o.LotLines).ThenInclude(ll => ll.Warehouse)
+            .FirstOrDefaultAsync(o => o.InvoiceId == invoiceId, ct);
+
+        // Retours déjà effectués sur cette facture
+        var existingReturnLines = await DbContext.CustomerCreditNoteLines
+            .Include(cnl => cnl.CreditNote)
+            .Where(cnl => cnl.CreditNote!.InvoiceId == invoiceId && !cnl.IsDeleted)
+            .ToListAsync(ct);
+
+        var result = new List<ReturnableInvoiceLineDto>();
+        foreach (var line in invoice.Lines)
+        {
+            var returnedForProduct = existingReturnLines
+                .Where(cnl => cnl.ProductId == line.ProductId)
+                .Sum(cnl => cnl.QuantityReturned);
+
+            // Lots utilisés à la livraison de cette commande, filtrés par produit
+            var lotsForProduct = order?.LotLines
+                .Where(ll => ll.ProductId == line.ProductId)
+                .ToList() ?? new List<CustomerOrderLotLine>();
+
+            var lots = lotsForProduct.Select(ll =>
+            {
+                var returnedForLot = existingReturnLines
+                    .Where(cnl => cnl.PurchaseLineId == ll.PurchaseLineId)
+                    .Sum(cnl => cnl.QuantityReturned);
+                return new ReturnableLotDto(
+                    ll.PurchaseLineId,
+                    ll.PurchaseLine?.LotNumber ?? "",
+                    ll.PurchaseLine?.ExpirationDate,
+                    ll.WarehouseId,
+                    ll.Warehouse?.Name,
+                    ll.QuantityAllocated,
+                    returnedForLot,
+                    Math.Max(0, ll.QuantityAllocated - returnedForLot));
+            }).ToList();
+
+            result.Add(new ReturnableInvoiceLineDto(
+                line.Id,
+                line.ProductId,
+                line.Product?.Code ?? "",
+                line.Product?.Designation ?? "",
+                line.Quantity,
+                returnedForProduct,
+                Math.Max(0, line.Quantity - returnedForProduct),
+                line.UnitPriceHt,
+                line.DiscountPercent,
+                line.TvaRate,
+                lots));
+        }
+
+        return result;
+    }
+
     private async Task<Invoice?> LoadAggregateAsync(long id, CancellationToken ct)
         => await DbSet
             .Include(i => i.Customer)

@@ -97,8 +97,14 @@ public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICu
                 throw new DomainException($"Produit introuvable (Id={lineDto.ProductId}).");
             if (!await DbContext.Warehouses.AnyAsync(w => w.Id == lineDto.WarehouseId, ct))
                 throw new DomainException($"Magasin introuvable (Id={lineDto.WarehouseId}).");
-            if (lineDto.PurchaseLineId.HasValue && !await DbContext.PurchaseLines.AnyAsync(pl => pl.Id == lineDto.PurchaseLineId, ct))
-                throw new DomainException($"Ligne d'arrivage introuvable (Id={lineDto.PurchaseLineId}).");
+
+            PurchaseLine? purchaseLine = null;
+            if (lineDto.PurchaseLineId.HasValue)
+            {
+                purchaseLine = await DbContext.PurchaseLines
+                    .FirstOrDefaultAsync(pl => pl.Id == lineDto.PurchaseLineId, ct)
+                    ?? throw new DomainException($"Ligne d'arrivage introuvable (Id={lineDto.PurchaseLineId}).");
+            }
 
             var line = new CustomerCreditNoteLine
             {
@@ -114,6 +120,13 @@ public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICu
             };
             line.ComputeAmounts();
 
+            // Réinjecter le stock sur le lot d'origine
+            if (purchaseLine is not null)
+            {
+                purchaseLine.ReleaseStock(lineDto.QuantityReturned);
+                DbContext.PurchaseLines.Update(purchaseLine);
+            }
+
             // Create stock return movement
             var movement = new StockMovement
             {
@@ -122,7 +135,7 @@ public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICu
                 PurchaseLineId = lineDto.PurchaseLineId,
                 MovementType = StockMovementType.Return,
                 Quantity = lineDto.QuantityReturned,
-                MovementDate = DateTime.UtcNow,
+                MovementDate = creditNote.CreditNoteDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 Reference = reference,
                 Notes = $"Retour client — avoir {reference}",
             };
