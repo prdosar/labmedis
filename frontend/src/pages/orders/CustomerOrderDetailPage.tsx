@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2, Package } from 'lucide-react'
+import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2, Package, CheckCheck } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto, CustomerDto } from '../../api/types'
 import { customerOrdersApi, invoicesApi, customersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
+import { Modal } from '../../components/ui/Modal'
 import { fmtXof } from '../../utils/format'
 import { montantXofEnLettres } from '../../utils/numberToFrenchWords'
 
@@ -132,10 +133,23 @@ function BLPrintLayout({ order, customer, printDate }: { order: CustomerOrderDto
       </table>
 
       {/* Signature zones */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', fontSize: '10pt' }}>
-        <div style={{ textAlign: 'center', width: '200px' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '35px' }}>Signature & cachet client</div>
-          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', color: '#888', fontSize: '9pt' }}>{order.customerName}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', fontSize: '10pt', gap: '30px' }}>
+        <div style={{ width: '240px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>Réception client</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', fontSize: '9pt' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ minWidth: '60px' }}>Date :</span>
+              <span style={{ flex: 1, borderBottom: '1px solid #333', height: '18px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ minWidth: '60px' }}>Nom :</span>
+              <span style={{ flex: 1, borderBottom: '1px solid #333', height: '18px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ minWidth: '60px' }}>Signature :</span>
+              <span style={{ flex: 1, borderBottom: '1px solid #333', height: '18px' }} />
+            </div>
+          </div>
         </div>
         <div style={{ textAlign: 'center', width: '200px' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '35px' }}>Signature LabMedis</div>
@@ -259,7 +273,17 @@ function FacturePrintLayout({ order, invoice, customer, printDate }: { order: Cu
         </div>
         <div style={{ flex: 1, textAlign: 'right' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>Le Pharmacien responsable</div>
-          <div style={{ display: 'inline-block', border: '1px solid #333', padding: '6px 10px', fontSize: '9pt', lineHeight: '1.4', textAlign: 'left' }}>
+          <div style={{
+            display: 'inline-block',
+            border: '2px solid #1e40af',
+            padding: '6px 10px',
+            fontSize: '9pt',
+            lineHeight: '1.4',
+            textAlign: 'left',
+            color: '#1e40af',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact',
+          }}>
             <div style={{ fontWeight: 'bold' }}>LABMEDIS SARL</div>
             <div>380 Bd de la Kara</div>
             <div>08 BP 80859 Tél : +228 92 26 99 33</div>
@@ -294,6 +318,9 @@ export function CustomerOrderDetailPage() {
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const [sendingEmail, setSendingEmail] = useState<'proforma' | 'facture' | null>(null)
   const [printMode, setPrintMode] = useState<'bl' | 'facture' | null>(null)
+  const [showComplete, setShowComplete] = useState(false)
+  const [deliveryDate, setDeliveryDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [completing, setCompleting] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -341,6 +368,25 @@ export function CustomerOrderDetailPage() {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleComplete() {
+    if (!id) return
+    setCompleting(true)
+    try {
+      await customerOrdersApi.complete(Number(id), deliveryDate || null)
+      toast('Commande clôturée et livrée.', 'success')
+      setShowComplete(false)
+      const updated = await customerOrdersApi.getById(Number(id))
+      setOrder(updated)
+      if (updated.invoiceId) {
+        invoicesApi.getById(updated.invoiceId).then(setInvoice).catch(() => null)
+      }
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur.', 'error')
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -682,6 +728,17 @@ export function CustomerOrderDetailPage() {
               </Button>
             )}
 
+            {/* Complete (only if EnPréparation) */}
+            {order.status === 'EnPréparation' && (
+              <Button
+                onClick={() => { setDeliveryDate(new Date().toISOString().slice(0, 10)); setShowComplete(true) }}
+                className="w-full justify-center"
+              >
+                <CheckCheck size={14} />
+                Clôturer et livrer
+              </Button>
+            )}
+
             {/* Edit (only if not readonly) */}
             {!isReadonly && (
               <Button
@@ -700,6 +757,43 @@ export function CustomerOrderDetailPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showComplete}
+        onClose={() => setShowComplete(false)}
+        title="Clôturer la commande"
+        size="sm"
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Clôturer <span className="font-semibold">{order.reference}</span> ? Le stock sera déduit selon les lots préparés et les écritures comptables passées.
+        </p>
+        <div className="mb-6">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Date de livraison</label>
+          <input
+            type="date"
+            value={deliveryDate}
+            onChange={e => setDeliveryDate(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
+          />
+          <p className="mt-1 text-xs text-gray-400">Utilisée pour la date des mouvements de stock et la facture émise.</p>
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => setShowComplete(false)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleComplete}
+            disabled={completing || !deliveryDate}
+            className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2"
+          >
+            {completing && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Clôturer et livrer
+          </button>
+        </div>
+      </Modal>
     </>
   )
 }
