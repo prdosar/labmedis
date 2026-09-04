@@ -44,6 +44,7 @@ export function CustomerOrderFormPage() {
   const [vatApplied, setVatApplied] = useState(false)
   const [currency, setCurrency] = useState('XOF')
   const [notes, setNotes] = useState('')
+  const [customerOrderReference, setCustomerOrderReference] = useState('')
   const [deliveryDelayId, setDeliveryDelayId] = useState('')
   const [paymentDelayId, setPaymentDelayId] = useState('')
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
@@ -86,6 +87,7 @@ export function CustomerOrderFormPage() {
       setVatApplied(order.vatApplied)
       setCurrency(order.currency ?? 'XOF')
       setNotes(order.notes ?? '')
+      setCustomerOrderReference(order.customerOrderReference ?? '')
       if (order.deliveryDelayId) setDeliveryDelayId(String(order.deliveryDelayId))
       if (order.paymentDelayId) setPaymentDelayId(String(order.paymentDelayId))
       setLines(order.lines.map(l => {
@@ -190,6 +192,7 @@ export function CustomerOrderFormPage() {
         vatApplied,
         currency,
         notes: notes.trim() || null,
+        customerOrderReference: customerOrderReference.trim() || null,
         deliveryDelayId: deliveryDelayId ? Number(deliveryDelayId) : null,
         paymentDelayId: paymentDelayId ? Number(paymentDelayId) : null,
         lines: validLines.map(l => ({
@@ -274,16 +277,17 @@ export function CustomerOrderFormPage() {
                 )}
               </div>
 
-              {/* Notes */}
+              {/* Customer order reference (BC client) */}
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-gray-700">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  rows={customerStats ? 4 : 2}
-                  placeholder="Observations…"
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 resize-none"
+                <label className="text-sm font-medium text-gray-700">N° bon de commande client</label>
+                <input
+                  type="text"
+                  value={customerOrderReference}
+                  onChange={e => setCustomerOrderReference(e.target.value)}
+                  placeholder="Ex : BC-2026-042 (référence fournie par le client)"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                 />
+                <p className="text-xs text-gray-400">Affiché sur le BL et la facture. Laisser vide si non fourni.</p>
               </div>
             </div>
 

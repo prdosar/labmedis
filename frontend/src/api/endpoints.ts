@@ -445,9 +445,9 @@ export const customerOrdersApi = {
     return api.get<PagedResult<CustomerOrderSummaryDto>>(`/customer-orders?${qs}`)
   },
   getById: (id: number) => api.get<CustomerOrderDto>(`/customer-orders/${id}`),
-  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null }) =>
+  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null; customerOrderReference?: string | null }) =>
     api.post<CustomerOrderDto>('/customer-orders', dto),
-  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null }) =>
+  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null; customerOrderReference?: string | null }) =>
     api.put<CustomerOrderDto>(`/customer-orders/${id}`, dto),
   validate: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/validate`),
   getSuggestedLots: (id: number) =>

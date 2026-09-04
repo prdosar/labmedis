@@ -7,4 +7,5 @@ public record CustomerOrderUpdateDto(
     string? Notes,
     IReadOnlyList<CustomerOrderLineInputDto> Lines,
     long? DeliveryDelayId = null,
-    long? PaymentDelayId = null);
+    long? PaymentDelayId = null,
+    string? CustomerOrderReference = null);

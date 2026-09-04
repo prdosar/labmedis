@@ -18,6 +18,7 @@ public class CustomerOrder : BaseEntity
     public bool VatApplied { get; set; }
     public string Currency { get; set; } = "XOF";
     public string? Notes { get; set; }
+    public string? CustomerOrderReference { get; set; }
 
     public long? InvoiceId { get; private set; }
     public Invoice? Invoice { get; set; }

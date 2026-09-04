@@ -22,6 +22,7 @@ public record CustomerOrderDto(
     string? DeliveryDelayLabel,
     long? PaymentDelayId,
     string? PaymentDelayLabel,
+    string? CustomerOrderReference,
     IReadOnlyList<CustomerOrderLineDto> Lines,
     IReadOnlyList<CustomerOrderLotLineDto> LotLines,
     DateTime CreatedAt,

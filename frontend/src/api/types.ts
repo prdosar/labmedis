@@ -176,6 +176,7 @@ export interface CustomerOrderDto {
   deliveryDelayLabel: string | null
   paymentDelayId: number | null
   paymentDelayLabel: string | null
+  customerOrderReference: string | null
   lines: CustomerOrderLineDto[]
   lotLines: CustomerOrderLotLineDto[]
   createdAt: string

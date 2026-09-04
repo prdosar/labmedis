@@ -100,6 +100,7 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             Notes = dto.Notes?.Trim(),
             DeliveryDelayId = dto.DeliveryDelayId,
             PaymentDelayId = dto.PaymentDelayId,
+            CustomerOrderReference = string.IsNullOrWhiteSpace(dto.CustomerOrderReference) ? null : dto.CustomerOrderReference.Trim(),
         };
 
         var reference = await NextReferenceAsync(ct);
@@ -154,6 +155,7 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         order.Notes = dto.Notes?.Trim();
         order.DeliveryDelayId = dto.DeliveryDelayId;
         order.PaymentDelayId = dto.PaymentDelayId;
+        order.CustomerOrderReference = string.IsNullOrWhiteSpace(dto.CustomerOrderReference) ? null : dto.CustomerOrderReference.Trim();
 
         // Set updated totals
         order.TotalHt = newLines.Sum(l => l.LineTotalHt);
@@ -765,6 +767,7 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         o.InvoiceId, o.Invoice?.Reference,
         o.DeliveryDelayId, o.DeliveryDelay?.Label,
         o.PaymentDelayId, o.PaymentDelay?.Label,
+        o.CustomerOrderReference,
         lines,
         o.LotLines.Select(ToLotLineDto).ToList(),
         o.CreatedAt, o.UpdatedAt);

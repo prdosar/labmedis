@@ -83,13 +83,30 @@ function fmtBLDate(s: string | null) {
   try { return new Date(s).toLocaleDateString('fr-FR') } catch { return s }
 }
 
-function BLPrintLayout({ order, printDate }: { order: CustomerOrderDto; printDate: string }) {
+function BLPrintLayout({ order, customer, printDate }: { order: CustomerOrderDto; customer: CustomerDto | null; printDate: string }) {
   const hasLots = order.lotLines.length > 0
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', padding: '15mm 20mm' }}>
       <PrintHeader title="BON DE LIVRAISON" reference={order.reference} date={printDate} />
-      <PrintCustomerBlock name={order.customerName} />
+
+      {/* Client block (adresse + BC client) */}
+      <div style={{ marginBottom: '14px', border: '1px solid #333', padding: '8px 10px', fontSize: '10pt' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 1fr', rowGap: '3px', columnGap: '8px' }}>
+          <span style={{ fontWeight: 'bold' }}>Client</span>
+          <span>: {customer?.name ?? order.customerName}</span>
+          <span style={{ fontWeight: 'bold' }}>Code Client</span>
+          <span>: {customer?.code ?? '—'}</span>
+          <span style={{ fontWeight: 'bold' }}>Adresse</span>
+          <span>: {customer?.address ?? '—'}</span>
+          <span style={{ fontWeight: 'bold' }}>Tél</span>
+          <span>: {customer?.phone ?? '—'}</span>
+          <span style={{ fontWeight: 'bold' }}>BP</span>
+          <span>: {customer?.postalBox ?? '—'}{customer?.city ? ` ${customer.city}` : ''}</span>
+          <span style={{ fontWeight: 'bold' }}>N° BC Client</span>
+          <span>: {order.customerOrderReference ?? '—'}</span>
+        </div>
+      </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
         <thead>
@@ -190,6 +207,8 @@ function FacturePrintLayout({ order, invoice, customer, printDate }: { order: Cu
             <span>: {invoiceDateStr}</span>
             <span style={{ fontWeight: 'bold' }}>Commande N°</span>
             <span>: {order.reference}</span>
+            <span style={{ fontWeight: 'bold' }}>BC Client</span>
+            <span>: {order.customerOrderReference ?? '—'}</span>
           </div>
         </div>
       </div>
@@ -369,7 +388,7 @@ export function CustomerOrderDetailPage() {
     <>
       {/* ── BL print area ── */}
       <div className={printMode === 'bl' ? 'hidden print:block' : 'hidden'}>
-        <BLPrintLayout order={order} printDate={printDate} />
+        <BLPrintLayout order={order} customer={customer} printDate={printDate} />
       </div>
 
       {/* ── Facture print area ── */}

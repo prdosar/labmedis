@@ -18,6 +18,7 @@ public class CustomerOrderConfiguration : IEntityTypeConfiguration<CustomerOrder
         builder.Property(x => x.Status).HasConversion<int>();
 
         builder.Property(x => x.Notes).HasMaxLength(1000);
+        builder.Property(x => x.CustomerOrderReference).HasMaxLength(100);
 
         builder.Property(x => x.TotalHt).HasColumnType("numeric(18,2)");
         builder.Property(x => x.TotalTva).HasColumnType("numeric(18,2)");
