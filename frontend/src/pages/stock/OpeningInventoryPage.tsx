@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Plus, Search, Trash2, X } from 'lucide-react'
 import { productsApi, warehousesApi, stockMovementsApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 
 interface LineState {
+  id: string
   productId: number
   designation: string
   code: string
@@ -22,6 +23,9 @@ const inputCls = 'w-full rounded border border-gray-200 bg-white px-2 py-1.5 tex
 const inputClsLeft = inputCls.replace('text-right', 'text-left')
 
 function numVal(s: string): number { return parseFloat(s.replace(',', '.')) || 0 }
+
+let idSeq = 0
+function nextId() { idSeq += 1; return `l${idSeq}` }
 
 export function OpeningInventoryPage() {
   const { toast } = useToast()
@@ -47,6 +51,7 @@ export function OpeningInventoryPage() {
         a.designation.localeCompare(b.designation, 'fr'),
       )
       setLines(sorted.map(p => ({
+        id: nextId(),
         productId: p.id,
         designation: p.designation,
         code: p.code,
@@ -59,23 +64,56 @@ export function OpeningInventoryPage() {
         expirationDate: '',
       })))
 
-      // Vérifie si du stock existe déjà
       if (prods.items.some(p => p.stockQuantity > 0)) setExistingStock(true)
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
-  function setLine(idx: number, patch: Partial<LineState>) {
-    setLines(ls => ls.map((l, i) => i === idx ? { ...l, ...patch } : l))
+  function setLine(id: string, patch: Partial<LineState>) {
+    setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l))
+  }
+
+  function addLotAfter(id: string) {
+    setLines(ls => {
+      const idx = ls.findIndex(l => l.id === id)
+      if (idx === -1) return ls
+      const src = ls[idx]
+      const newLine: LineState = {
+        id: nextId(),
+        productId: src.productId,
+        designation: src.designation,
+        code: src.code,
+        supplierName: src.supplierName,
+        warehouseId: src.warehouseId,
+        quantity: '',
+        unitCostPriceXof: src.unitCostPriceXof,
+        sellingPriceHt: src.sellingPriceHt,
+        lotNumber: '',
+        expirationDate: '',
+      }
+      let insertAt = idx + 1
+      while (insertAt < ls.length && ls[insertAt].productId === src.productId) insertAt += 1
+      return [...ls.slice(0, insertAt), newLine, ...ls.slice(insertAt)]
+    })
+  }
+
+  function removeLine(id: string) {
+    setLines(ls => ls.filter(l => l.id !== id))
   }
 
   const filledLines = lines.filter(l => numVal(l.quantity) > 0)
 
-  const filtered = lines.filter(l =>
+  const filtered = useMemo(() => lines.filter(l =>
     !search ||
     l.designation.toLowerCase().includes(search.toLowerCase()) ||
     l.code.toLowerCase().includes(search.toLowerCase()) ||
     l.supplierName.toLowerCase().includes(search.toLowerCase()),
-  )
+  ), [lines, search])
+
+  const productLotCount = useMemo(() => {
+    const map = new Map<number, number>()
+    lines.forEach(l => map.set(l.productId, (map.get(l.productId) ?? 0) + 1))
+    return map
+  }, [lines])
 
   async function handleSave() {
     if (filledLines.length === 0) {
@@ -97,7 +135,8 @@ export function OpeningInventoryPage() {
         })),
       })
       setDone(true)
-      toast(`Inventaire d'ouverture enregistré — ${filledLines.length} produit(s).`)
+      const productCount = new Set(filledLines.map(l => l.productId)).size
+      toast(`Inventaire d'ouverture enregistré — ${filledLines.length} lot(s) sur ${productCount} produit(s).`)
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.", 'error')
     } finally {
@@ -114,33 +153,26 @@ export function OpeningInventoryPage() {
   }
 
   if (done) {
+    const productCount = new Set(filledLines.map(l => l.productId)).size
     return (
       <div className="flex flex-col items-center gap-4 py-20">
         <CheckCircle2 size={48} className="text-green-500" />
         <p className="text-xl font-semibold text-gray-800">Inventaire d'ouverture enregistré</p>
-        <p className="text-sm text-gray-500">{filledLines.length} produit(s) en stock. Vous pouvez maintenant traiter des commandes clients.</p>
-        <Button onClick={() => { setDone(false); setLines(ls => ls.map(l => ({ ...l, quantity: '', unitCostPriceXof: '', sellingPriceHt: '', lotNumber: '', expirationDate: '' }))) }}>
+        <p className="text-sm text-gray-500">{filledLines.length} lot(s) sur {productCount} produit(s) en stock. Vous pouvez maintenant traiter des commandes clients.</p>
+        <Button onClick={() => window.location.reload()}>
           Saisir un autre inventaire
         </Button>
       </div>
     )
   }
 
-  // Group lines by supplier for display
-  const supplierGroups: Record<string, number[]> = {}
-  filtered.forEach((l, displayIdx) => {
-    const key = l.supplierName
-    if (!supplierGroups[key]) supplierGroups[key] = []
-    supplierGroups[key].push(displayIdx)
-  })
-
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-gray-500">
             Saisissez les quantités et prix actuels de chaque produit en stock.
+            Cliquez sur <span className="inline-flex items-center gap-0.5 font-medium"><Plus size={12} className="inline" /> Lot</span> pour ajouter plusieurs lots (dates d'expiration différentes) au même produit.
             Les lignes avec quantité = 0 sont ignorées.
           </p>
           <div className="flex items-center gap-2 mt-1">
@@ -154,7 +186,7 @@ export function OpeningInventoryPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">{filledLines.length} produit(s) saisi(s)</span>
+          <span className="text-sm text-gray-500">{filledLines.length} lot(s) saisi(s)</span>
           <Button onClick={handleSave} loading={saving} disabled={filledLines.length === 0}>
             Enregistrer l'inventaire
           </Button>
@@ -168,7 +200,6 @@ export function OpeningInventoryPage() {
         </div>
       )}
 
-      {/* Search */}
       <div className="relative max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
@@ -185,10 +216,9 @@ export function OpeningInventoryPage() {
         )}
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+          <table className="w-full text-sm" style={{ minWidth: '980px' }}>
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Code</th>
@@ -199,23 +229,35 @@ export function OpeningInventoryPage() {
                 <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">PV HT/u (XOF)</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">N° lot</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">Expiration</th>
+                <th className="px-4 py-2.5 w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map((l) => {
-                const origIdx = lines.findIndex(x => x.productId === l.productId)
+              {filtered.map((l, filteredIdx) => {
+                const prevSameProduct = filteredIdx > 0 && filtered[filteredIdx - 1].productId === l.productId
+                const isFirstOfProduct = !prevSameProduct
+                const totalLotsForProduct = productLotCount.get(l.productId) ?? 1
+                const canRemove = totalLotsForProduct > 1
                 const hasFill = numVal(l.quantity) > 0
 
                 return (
                   <tr
-                    key={l.productId}
-                    className={`transition-colors ${hasFill ? 'bg-green-50/40' : 'hover:bg-gray-50/50'}`}
+                    key={l.id}
+                    className={`transition-colors ${hasFill ? 'bg-green-50/40' : 'hover:bg-gray-50/50'} ${!isFirstOfProduct ? 'border-t-0' : ''}`}
                   >
                     <td className="px-4 py-2">
-                      <span className="font-mono text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{l.code}</span>
+                      {isFirstOfProduct ? (
+                        <span className="font-mono text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{l.code}</span>
+                      ) : (
+                        <span className="text-xs text-gray-300 pl-2">↳ lot</span>
+                      )}
                     </td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{l.designation}</td>
-                    <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-0">{l.supplierName}</td>
+                    <td className="px-4 py-2 font-medium text-gray-800">
+                      {isFirstOfProduct ? l.designation : <span className="text-xs text-gray-400 italic">même produit</span>}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-0">
+                      {isFirstOfProduct ? l.supplierName : ''}
+                    </td>
                     <td className="px-4 py-1.5">
                       <input
                         type="number"
@@ -223,7 +265,7 @@ export function OpeningInventoryPage() {
                         step="1"
                         placeholder="0"
                         value={l.quantity}
-                        onChange={e => setLine(origIdx, { quantity: e.target.value })}
+                        onChange={e => setLine(l.id, { quantity: e.target.value })}
                         className={inputCls}
                       />
                     </td>
@@ -234,7 +276,7 @@ export function OpeningInventoryPage() {
                         step="1"
                         placeholder="0"
                         value={l.unitCostPriceXof}
-                        onChange={e => setLine(origIdx, { unitCostPriceXof: e.target.value })}
+                        onChange={e => setLine(l.id, { unitCostPriceXof: e.target.value })}
                         className={inputCls}
                       />
                     </td>
@@ -245,7 +287,7 @@ export function OpeningInventoryPage() {
                         step="1"
                         placeholder="0"
                         value={l.sellingPriceHt}
-                        onChange={e => setLine(origIdx, { sellingPriceHt: e.target.value })}
+                        onChange={e => setLine(l.id, { sellingPriceHt: e.target.value })}
                         className={inputCls}
                       />
                     </td>
@@ -254,7 +296,7 @@ export function OpeningInventoryPage() {
                         type="text"
                         placeholder="optionnel"
                         value={l.lotNumber}
-                        onChange={e => setLine(origIdx, { lotNumber: e.target.value })}
+                        onChange={e => setLine(l.id, { lotNumber: e.target.value })}
                         className={inputClsLeft}
                       />
                     </td>
@@ -262,9 +304,31 @@ export function OpeningInventoryPage() {
                       <input
                         type="date"
                         value={l.expirationDate}
-                        onChange={e => setLine(origIdx, { expirationDate: e.target.value })}
+                        onChange={e => setLine(l.id, { expirationDate: e.target.value })}
                         className={inputClsLeft}
                       />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => addLotAfter(l.id)}
+                          title="Ajouter un lot pour ce produit"
+                          className="p-1 text-brand-500 hover:text-brand-700 hover:bg-brand-50 rounded transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        {canRemove && !isFirstOfProduct && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(l.id)}
+                            title="Supprimer ce lot"
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -274,10 +338,11 @@ export function OpeningInventoryPage() {
         </div>
       </div>
 
-      {/* Footer total */}
       {filledLines.length > 0 && (
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
-          <span className="text-sm text-gray-600">{filledLines.length} produit(s) renseigné(s)</span>
+          <span className="text-sm text-gray-600">
+            {filledLines.length} lot(s) — {new Set(filledLines.map(l => l.productId)).size} produit(s)
+          </span>
           <Button onClick={handleSave} loading={saving}>
             Enregistrer l'inventaire
           </Button>

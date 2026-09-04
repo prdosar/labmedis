@@ -230,12 +230,24 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
             purchase.SetExchangeRate(1m);
             DbContext.Purchases.Add(purchase);
 
+            var autoLotCounter = new Dictionary<long, int>();
             foreach (var lineInput in group)
             {
                 var product = products[lineInput.ProductId];
-                var lotNumber = !string.IsNullOrWhiteSpace(lineInput.LotNumber)
-                    ? lineInput.LotNumber.Trim()
-                    : $"OUV-{product.Code}";
+                string lotNumber;
+                if (!string.IsNullOrWhiteSpace(lineInput.LotNumber))
+                {
+                    lotNumber = lineInput.LotNumber.Trim();
+                }
+                else
+                {
+                    var count = autoLotCounter.GetValueOrDefault(product.Id) + 1;
+                    autoLotCounter[product.Id] = count;
+                    var multipleLotsForProduct = group.Count(l => l.ProductId == product.Id) > 1;
+                    lotNumber = multipleLotsForProduct
+                        ? $"OUV-{product.Code}-{count}"
+                        : $"OUV-{product.Code}";
+                }
 
                 // 1 carton = toute la quantité, PA/carton = PA/unité × quantité → PA/unité recalculé = PA saisi
                 var priceLine = purchase.AddLine(
