@@ -5,7 +5,7 @@ import type { StockMovementDto, ProductDto, WarehouseDto } from '../../api/types
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import type { BadgeVariant } from '../../components/ui/Badge'
-import { Input } from '../../components/ui/Input'
+import { Input, ComboSelect } from '../../components/ui/Input'
 import { Pagination } from '../../components/ui/Pagination'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
@@ -165,22 +165,22 @@ export function DiverseExitsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Produit *</label>
-              <select className={inputCls} value={productId} onChange={e => setProductId(e.target.value)}>
-                <option value="">Sélectionner…</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>{p.code} — {p.designation}</option>
-                ))}
-              </select>
+              <ComboSelect
+                value={productId}
+                onChange={setProductId}
+                options={products.map(p => ({ value: String(p.id), label: `${p.code} — ${p.designation}` }))}
+                placeholder="Rechercher un produit…"
+              />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Entrepôt *</label>
-              <select className={inputCls} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
-                <option value="">Sélectionner…</option>
-                {warehouses.map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+              <ComboSelect
+                value={warehouseId}
+                onChange={setWarehouseId}
+                options={warehouses.map(w => ({ value: String(w.id), label: w.name }))}
+                placeholder="Rechercher un entrepôt…"
+              />
             </div>
 
             <div>
@@ -271,7 +271,7 @@ export function DiverseExitsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{item.warehouseName ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500">{fmtDate(item.movementDate)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-red-600">−{item.quantity}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-600">{Math.abs(item.quantity)}</td>
                   <td className="px-4 py-3 text-gray-700">{item.reason ?? '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <Badge variant={TYPE_VARIANT[item.movementType] ?? 'gray'}>
