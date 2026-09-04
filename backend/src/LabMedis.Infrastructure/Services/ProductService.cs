@@ -169,20 +169,13 @@ public class ProductService : BaseRepository<Product>, IProductService
                 sm.Notes))
             .ToListAsync(cancellationToken);
 
-        // Quantity on active invoices not yet fully delivered
-        var totalInvoicedQty = await DbContext.InvoiceLines
+        // Quantity on Draft invoices = orders validated but not yet closed (delivery pending).
+        // Once the order is closed (Complete), the invoice is Issued and stock is consumed
+        // atomically — no "pending delivery" left.
+        var pendingDeliveryToClients = await DbContext.InvoiceLines
             .Where(il => il.ProductId == id && !il.IsDeleted
-                && il.Invoice!.Status != InvoiceStatus.Draft
-                && il.Invoice!.Status != InvoiceStatus.Cancelled)
+                && il.Invoice!.Status == InvoiceStatus.Draft)
             .SumAsync(il => (int?)il.Quantity, cancellationToken) ?? 0;
-
-        var totalDeliveredQty = await DbContext.DeliveryLines
-            .Where(dl => !dl.IsDeleted
-                && dl.InvoiceLine!.ProductId == id
-                && dl.Delivery!.Status == DeliveryStatus.Delivered)
-            .SumAsync(dl => (int?)dl.QuantityDelivered, cancellationToken) ?? 0;
-
-        var pendingDeliveryToClients = Math.Max(0, totalInvoicedQty - totalDeliveredQty);
 
         // Quantity on purchase orders not yet arrived (no arrivalDate)
         var pendingFromSuppliers = await DbContext.PurchaseLines
