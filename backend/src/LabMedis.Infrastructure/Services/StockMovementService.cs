@@ -202,6 +202,23 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
         var date = input.Date.Date;
         var bySupplier = input.Lines.GroupBy(l => products[l.ProductId].SupplierId).ToList();
 
+        var refPrefix = $"INV-OUV-{date:yyyyMMdd}";
+        var existingRefs = await DbContext.Purchases
+            .Where(p => p.Reference.StartsWith(refPrefix))
+            .Select(p => p.Reference)
+            .ToListAsync(ct);
+        var nextSeq = 1;
+        foreach (var r in existingRefs)
+        {
+            var suffix = r.Length > refPrefix.Length && r[refPrefix.Length] == '-'
+                ? r[(refPrefix.Length + 1)..]
+                : "0";
+            if (int.TryParse(suffix, out var n) && n >= nextSeq)
+                nextSeq = n + 1;
+            else if (r == refPrefix && nextSeq < 2)
+                nextSeq = 2;
+        }
+
         for (var i = 0; i < bySupplier.Count; i++)
         {
             var group = bySupplier[i];
@@ -210,12 +227,7 @@ public class StockMovementService : BaseRepository<StockMovement>, IStockMovemen
                 .FirstOrDefaultAsync(s => s.Id == supplierId && !s.IsDeleted, ct)
                 ?? throw new DomainException($"Fournisseur introuvable (Id={supplierId}).");
 
-            var purchaseRef = bySupplier.Count > 1
-                ? $"INV-OUV-{date:yyyyMMdd}-{i + 1}"
-                : $"INV-OUV-{date:yyyyMMdd}";
-
-            if (await DbContext.Purchases.AnyAsync(p => p.Reference == purchaseRef, ct))
-                throw new DomainException($"Un inventaire d'ouverture existe déjà pour cette date ({purchaseRef}). Supprimez-le d'abord.");
+            var purchaseRef = $"{refPrefix}-{nextSeq + i}";
 
             var purchase = new Purchase
             {
