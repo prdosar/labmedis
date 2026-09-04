@@ -66,6 +66,7 @@ const deliveryItem: NavItem = { to: '/deliveries', label: 'Livraisons', icon: <S
 const stockNavItems: NavItem[] = [
   { to: '/stock-movements', label: 'Mouvements', icon: <BarChart3 size={16} /> },
   { to: '/stock/opening-inventory', label: 'Inventaire d\'ouverture', icon: <PackageSearch size={16} /> },
+  { to: '/stock/inventory-report', label: 'Rapport d\'inventaire', icon: <FileText size={16} /> },
   { to: '/stock/customer-returns', label: 'Retours clients', icon: <Undo2 size={16} /> },
   { to: '/stock/supplier-returns', label: 'Retours fournisseurs', icon: <ArrowLeftRight size={16} /> },
   { to: '/stock/diverse-exits', label: 'Sorties diverses', icon: <Trash2 size={16} /> },

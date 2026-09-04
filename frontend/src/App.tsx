@@ -26,6 +26,7 @@ import { OpeningInventoryPage } from './pages/stock/OpeningInventoryPage'
 import { CustomerReturnsPage } from './pages/stock/CustomerReturnsPage'
 import { SupplierReturnsPage } from './pages/stock/SupplierReturnsPage'
 import { DiverseExitsPage } from './pages/stock/DiverseExitsPage'
+import { InventoryReportPage } from './pages/stock/InventoryReportPage'
 import { CategoriesPage } from './pages/config/CategoriesPage'
 import { TherapeuticClassesPage } from './pages/config/TherapeuticClassesPage'
 import { ProductFormsPage } from './pages/config/ProductFormsPage'
@@ -119,6 +120,7 @@ export default function App() {
               <Route path="/stock/customer-returns" element={<CustomerReturnsPage />} />
               <Route path="/stock/supplier-returns" element={<SupplierReturnsPage />} />
               <Route path="/stock/diverse-exits" element={<DiverseExitsPage />} />
+              <Route path="/stock/inventory-report" element={<InventoryReportPage />} />
               <Route path="/config/categories" element={<CategoriesPage />} />
               <Route path="/config/therapeutic-classes" element={<TherapeuticClassesPage />} />
               <Route path="/config/product-forms" element={<ProductFormsPage />} />

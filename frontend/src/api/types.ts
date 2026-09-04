@@ -980,3 +980,41 @@ export interface UserDto {
   mustChangePassword: boolean
   roles: string[]
 }
+
+// ─── Reports ─────────────────────────────────────────────────────────────────
+
+export interface InventoryMovementCellDto {
+  units: number
+  cartons: number
+}
+
+export interface InventoryReportRowDto {
+  productId: number
+  productCode: string
+  productDesignation: string
+  supplierId: number | null
+  supplierName: string | null
+  unitsPerCarton: number
+  currentStockUnits: number
+  currentStockCartons: number
+  netMovementUnits: number
+  netMovementCartons: number
+  movementsByType: Record<string, InventoryMovementCellDto>
+}
+
+export interface InventoryReportTotalsDto {
+  totalCurrentStockUnits: number
+  totalCurrentStockCartons: number
+  totalNetMovementUnits: number
+  totalNetMovementCartons: number
+}
+
+export interface InventoryReportDto {
+  dateFrom: string
+  dateTo: string
+  supplierId: number | null
+  supplierName: string | null
+  movementType: string | null
+  rows: InventoryReportRowDto[]
+  totals: InventoryReportTotalsDto
+}

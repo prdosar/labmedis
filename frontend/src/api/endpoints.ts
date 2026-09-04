@@ -56,6 +56,7 @@ import type {
   UserDto,
   WarehouseDto,
   ProductStockInfoDto,
+  InventoryReportDto,
 } from './types'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -342,6 +343,25 @@ export const stockMovementsApi = {
     notes: string | null
     exitDate: string | null
   }) => api.post<StockMovementDto>('/stock-movements/diverse-exit', dto),
+}
+
+// ─── Reports (inventaire, ventes, etc.) ──────────────────────────────────────
+
+export const reportsApi = {
+  getInventory: (params: {
+    dateFrom: string
+    dateTo: string
+    supplierId?: number
+    movementType?: string
+  }) => {
+    const qs = new URLSearchParams({
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    })
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    if (params.movementType) qs.set('movementType', params.movementType)
+    return api.get<InventoryReportDto>(`/reports/inventory?${qs}`)
+  },
 }
 
 // ─── SupplierReturns ─────────────────────────────────────────────────────────
