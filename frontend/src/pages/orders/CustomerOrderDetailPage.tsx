@@ -151,9 +151,25 @@ function BLPrintLayout({ order, customer, printDate }: { order: CustomerOrderDto
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'center', width: '200px' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '35px' }}>Signature LabMedis</div>
-          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', color: '#888', fontSize: '9pt' }}>LabMedis SARL</div>
+        <div style={{ flex: 1, textAlign: 'right' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>Le Pharmacien responsable</div>
+          <div style={{
+            display: 'inline-block',
+            border: '2px solid #1e40af',
+            padding: '6px 10px',
+            fontSize: '9pt',
+            lineHeight: '1.4',
+            textAlign: 'left',
+            color: '#1e40af',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact',
+          }}>
+            <div style={{ fontWeight: 'bold' }}>LABMEDIS SARL</div>
+            <div>380 Bd de la Kara</div>
+            <div>08 BP 80859 Tél : +228 92 26 99 33</div>
+            <div>pharmacien@labmedis-togo.com</div>
+          </div>
+          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '30px', fontStyle: 'italic', color: '#000' }}>Dr ODOULAMI Doris</div>
         </div>
       </div>
       <div style={{ textAlign: 'center', fontSize: '8pt', color: '#aaa', borderTop: '1px solid #eee', marginTop: '20px', paddingTop: '6px' }}>
