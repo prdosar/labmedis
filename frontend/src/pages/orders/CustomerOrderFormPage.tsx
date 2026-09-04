@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
-import type { CustomerDto, ProductDto, CustomerOrderPreviewDto, CustomerStatsDto } from '../../api/types'
-import { customersApi, productsApi, customerOrdersApi } from '../../api/endpoints'
+import type { CustomerDto, ProductDto, CustomerOrderPreviewDto, CustomerStatsDto, DelayDto } from '../../api/types'
+import { customersApi, productsApi, customerOrdersApi, deliveryDelaysApi, paymentDelaysApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
@@ -37,11 +37,15 @@ export function CustomerOrderFormPage() {
 
   const [customers, setCustomers] = useState<CustomerDto[]>([])
   const [products, setProducts] = useState<ProductDto[]>([])
+  const [deliveryDelays, setDeliveryDelays] = useState<DelayDto[]>([])
+  const [paymentDelays, setPaymentDelays] = useState<DelayDto[]>([])
   const [customerId, setCustomerId] = useState('')
   const [orderDate, setOrderDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [vatApplied, setVatApplied] = useState(false)
   const [currency, setCurrency] = useState('XOF')
   const [notes, setNotes] = useState('')
+  const [deliveryDelayId, setDeliveryDelayId] = useState('')
+  const [paymentDelayId, setPaymentDelayId] = useState('')
   const [lines, setLines] = useState<LineInput[]>([emptyLine()])
   const [preview, setPreview] = useState<CustomerOrderPreviewDto | null>(null)
   const [customerStats, setCustomerStats] = useState<CustomerStatsDto | null>(null)
@@ -51,10 +55,24 @@ export function CustomerOrderFormPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    Promise.all([customersApi.getForSelect(), productsApi.getForSelect()])
-      .then(([c, p]) => { setCustomers(c); setProducts(p) })
+    Promise.all([
+      customersApi.getForSelect(),
+      productsApi.getForSelect(),
+      deliveryDelaysApi.getAll(),
+      paymentDelaysApi.getAll(),
+    ])
+      .then(([c, p, dd, pd]) => {
+        setCustomers(c); setProducts(p)
+        const activeDd = dd.filter(x => x.isActive)
+        const activePd = pd.filter(x => x.isActive)
+        setDeliveryDelays(activeDd); setPaymentDelays(activePd)
+        if (!isEdit) {
+          if (activeDd.length > 0) setDeliveryDelayId(String(activeDd[0].id))
+          if (activePd.length > 0) setPaymentDelayId(String(activePd[0].id))
+        }
+      })
       .finally(() => setInitialLoading(false))
-  }, [])
+  }, [isEdit])
 
   useEffect(() => {
     if (!isEdit || !id) return
@@ -68,6 +86,8 @@ export function CustomerOrderFormPage() {
       setVatApplied(order.vatApplied)
       setCurrency(order.currency ?? 'XOF')
       setNotes(order.notes ?? '')
+      if (order.deliveryDelayId) setDeliveryDelayId(String(order.deliveryDelayId))
+      if (order.paymentDelayId) setPaymentDelayId(String(order.paymentDelayId))
       setLines(order.lines.map(l => {
         const upc = l.unitsPerCarton > 0 ? l.unitsPerCarton : 1
         const cartons = upc > 1 ? Math.round(l.quantity / upc) : l.quantity
@@ -170,6 +190,8 @@ export function CustomerOrderFormPage() {
         vatApplied,
         currency,
         notes: notes.trim() || null,
+        deliveryDelayId: deliveryDelayId ? Number(deliveryDelayId) : null,
+        paymentDelayId: paymentDelayId ? Number(paymentDelayId) : null,
         lines: validLines.map(l => ({
           productId: Number(l.productId),
           quantity: Number(l.quantity),
@@ -302,6 +324,32 @@ export function CustomerOrderFormPage() {
                 />
                 Appliquer la TVA (18%)
               </label>
+            </div>
+
+            {/* Delays */}
+            <div className="flex items-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium whitespace-nowrap">Délai livraison</span>
+                <select
+                  value={deliveryDelayId}
+                  onChange={e => setDeliveryDelayId(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                >
+                  <option value="">—</option>
+                  {deliveryDelays.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium whitespace-nowrap">Délai paiement</span>
+                <select
+                  value={paymentDelayId}
+                  onChange={e => setPaymentDelayId(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                >
+                  <option value="">—</option>
+                  {paymentDelays.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 

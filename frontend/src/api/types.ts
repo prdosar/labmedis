@@ -172,10 +172,21 @@ export interface CustomerOrderDto {
   profit: number
   invoiceId: number | null
   invoiceReference: string | null
+  deliveryDelayId: number | null
+  deliveryDelayLabel: string | null
+  paymentDelayId: number | null
+  paymentDelayLabel: string | null
   lines: CustomerOrderLineDto[]
   lotLines: CustomerOrderLotLineDto[]
   createdAt: string
   updatedAt: string | null
+}
+
+export interface DelayDto {
+  id: number
+  label: string
+  sortOrder: number
+  isActive: boolean
 }
 
 export interface CustomerOrderSummaryDto {

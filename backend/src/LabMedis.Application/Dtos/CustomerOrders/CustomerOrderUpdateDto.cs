@@ -5,4 +5,6 @@ public record CustomerOrderUpdateDto(
     bool VatApplied,
     string Currency,
     string? Notes,
-    IReadOnlyList<CustomerOrderLineInputDto> Lines);
+    IReadOnlyList<CustomerOrderLineInputDto> Lines,
+    long? DeliveryDelayId = null,
+    long? PaymentDelayId = null);

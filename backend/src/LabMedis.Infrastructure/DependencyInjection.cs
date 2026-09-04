@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<ICountryService, CountryService>();
         services.AddScoped<ICustomsRegimeService, CustomsRegimeService>();
         services.AddScoped<ITransportTypeService, TransportTypeService>();
+        services.AddScoped<IDeliveryDelayService, DeliveryDelayService>();
+        services.AddScoped<IPaymentDelayService, PaymentDelayService>();
         services.AddScoped<IAccessService, AccessService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<ICustomerService, CustomerService>();

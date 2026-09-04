@@ -54,6 +54,8 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         var order = await DbSet
             .Include(o => o.Customer)
             .Include(o => o.Invoice)
+            .Include(o => o.DeliveryDelay)
+            .Include(o => o.PaymentDelay)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .Include(o => o.LotLines).ThenInclude(ll => ll.Product)
             .Include(o => o.LotLines).ThenInclude(ll => ll.PurchaseLine)
@@ -95,7 +97,9 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             OrderDate = dto.OrderDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
             VatApplied = dto.VatApplied,
             Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "XOF" : dto.Currency.Trim().ToUpperInvariant(),
-            Notes = dto.Notes?.Trim()
+            Notes = dto.Notes?.Trim(),
+            DeliveryDelayId = dto.DeliveryDelayId,
+            PaymentDelayId = dto.PaymentDelayId,
         };
 
         var reference = await NextReferenceAsync(ct);
@@ -148,6 +152,8 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         order.VatApplied = dto.VatApplied;
         order.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "XOF" : dto.Currency.Trim().ToUpperInvariant();
         order.Notes = dto.Notes?.Trim();
+        order.DeliveryDelayId = dto.DeliveryDelayId;
+        order.PaymentDelayId = dto.PaymentDelayId;
 
         // Set updated totals
         order.TotalHt = newLines.Sum(l => l.LineTotalHt);
@@ -757,6 +763,8 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         o.Status.ToString(), o.VatApplied, o.Currency, o.Notes,
         o.TotalHt, o.TotalTva, o.TotalTtc, o.TotalCost, o.Profit,
         o.InvoiceId, o.Invoice?.Reference,
+        o.DeliveryDelayId, o.DeliveryDelay?.Label,
+        o.PaymentDelayId, o.PaymentDelay?.Label,
         lines,
         o.LotLines.Select(ToLotLineDto).ToList(),
         o.CreatedAt, o.UpdatedAt);

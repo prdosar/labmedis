@@ -35,6 +35,7 @@ import type {
   PurchaseLineDto,
   PurchaseLineLotDto,
   PurchaseSummaryDto,
+  DelayDto,
   SimpleEntity,
   StockMovementDto,
   SupplierDto,
@@ -269,6 +270,26 @@ export const deliveriesApi = {
   cancel: (id: number) => api.post<DeliveryDto>(`/deliveries/${id}/cancel`),
 }
 
+// ─── DeliveryDelays / PaymentDelays ──────────────────────────────────────────
+
+export const deliveryDelaysApi = {
+  getAll: () => api.get<DelayDto[]>('/delivery-delays'),
+  create: (dto: { label: string; sortOrder?: number; isActive?: boolean }) =>
+    api.post<DelayDto>('/delivery-delays', dto),
+  update: (id: number, dto: { label: string; sortOrder: number; isActive: boolean }) =>
+    api.put<DelayDto>(`/delivery-delays/${id}`, dto),
+  delete: (id: number) => api.delete(`/delivery-delays/${id}`),
+}
+
+export const paymentDelaysApi = {
+  getAll: () => api.get<DelayDto[]>('/payment-delays'),
+  create: (dto: { label: string; sortOrder?: number; isActive?: boolean }) =>
+    api.post<DelayDto>('/payment-delays', dto),
+  update: (id: number, dto: { label: string; sortOrder: number; isActive: boolean }) =>
+    api.put<DelayDto>(`/payment-delays/${id}`, dto),
+  delete: (id: number) => api.delete(`/payment-delays/${id}`),
+}
+
 // ─── StockMovements ──────────────────────────────────────────────────────────
 
 export const stockMovementsApi = {
@@ -424,9 +445,9 @@ export const customerOrdersApi = {
     return api.get<PagedResult<CustomerOrderSummaryDto>>(`/customer-orders?${qs}`)
   },
   getById: (id: number) => api.get<CustomerOrderDto>(`/customer-orders/${id}`),
-  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[] }) =>
+  create: (dto: { customerId: number; orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null }) =>
     api.post<CustomerOrderDto>('/customer-orders', dto),
-  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[] }) =>
+  update: (id: number, dto: { orderDate: string; vatApplied: boolean; currency: string; notes?: string | null; lines: { productId: number; quantity: number; quantityRequested?: number; unitsPerCarton?: number }[]; deliveryDelayId?: number | null; paymentDelayId?: number | null }) =>
     api.put<CustomerOrderDto>(`/customer-orders/${id}`, dto),
   validate: (id: number) => api.post<CustomerOrderDto>(`/customer-orders/${id}/validate`),
   getSuggestedLots: (id: number) =>

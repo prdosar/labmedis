@@ -35,6 +35,7 @@ import {
   ShoppingCart,
   Receipt,
   TrendingDown,
+  Clock,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import logo from '../../assets/logo.png'
@@ -80,6 +81,7 @@ const configNav: NavItem[] = [
   { to: '/config/countries', label: 'Pays', icon: <Globe size={16} /> },
   { to: '/config/customs-regimes', label: 'Régimes douaniers', icon: <FileCheck size={16} /> },
   { to: '/config/transport-types', label: 'Types de transport', icon: <Route size={16} /> },
+  { to: '/config/delays', label: 'Délais livraison / paiement', icon: <Clock size={16} /> },
 ]
 
 const accountingNav: NavItem[] = [

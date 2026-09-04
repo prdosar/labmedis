@@ -36,6 +36,18 @@ public class CustomerOrderConfiguration : IEntityTypeConfiguration<CustomerOrder
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(x => x.DeliveryDelay)
+            .WithMany()
+            .HasForeignKey(x => x.DeliveryDelayId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.PaymentDelay)
+            .WithMany()
+            .HasForeignKey(x => x.PaymentDelayId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasMany(x => x.Lines)
             .WithOne(l => l.CustomerOrder)
             .HasForeignKey(l => l.CustomerOrderId)

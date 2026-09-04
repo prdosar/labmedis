@@ -22,6 +22,12 @@ public class CustomerOrder : BaseEntity
     public long? InvoiceId { get; private set; }
     public Invoice? Invoice { get; set; }
 
+    public long? DeliveryDelayId { get; set; }
+    public DeliveryDelay? DeliveryDelay { get; set; }
+
+    public long? PaymentDelayId { get; set; }
+    public PaymentDelay? PaymentDelay { get; set; }
+
     public decimal TotalHt { get; set; }
     public decimal TotalTva { get; set; }
     public decimal TotalTtc { get; set; }

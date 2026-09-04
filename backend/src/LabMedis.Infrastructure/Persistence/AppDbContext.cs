@@ -59,6 +59,8 @@ public class AppDbContext : IdentityDbContext<User, Role, long>
     public DbSet<ExpenseBudget> ExpenseBudgets => Set<ExpenseBudget>();
     public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
     public DbSet<DepreciationLine> DepreciationLines => Set<DepreciationLine>();
+    public DbSet<DeliveryDelay> DeliveryDelays => Set<DeliveryDelay>();
+    public DbSet<PaymentDelay> PaymentDelays => Set<PaymentDelay>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

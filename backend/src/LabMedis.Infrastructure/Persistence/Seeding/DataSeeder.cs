@@ -28,6 +28,28 @@ public static class DataSeeder
         await SeedSuppliersAsync(db, cancellationToken);
         await SeedCustomersAsync(db, cancellationToken);
         await SeedProductsAsync(db, cancellationToken);
+        await SeedDeliveryDelaysAsync(db, cancellationToken);
+        await SeedPaymentDelaysAsync(db, cancellationToken);
+    }
+
+    private static async Task SeedDeliveryDelaysAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.DeliveryDelays.AnyAsync(ct))
+            return;
+        var labels = new[] { "24 heures", "48 heures", "72 heures", "1 semaine" };
+        for (var i = 0; i < labels.Length; i++)
+            db.DeliveryDelays.Add(new DeliveryDelay { Label = labels[i], SortOrder = i, IsActive = true });
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedPaymentDelaysAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.PaymentDelays.AnyAsync(ct))
+            return;
+        var labels = new[] { "Comptant", "15 jours date facture", "30 jours date facture", "45 jours date facture", "60 jours date facture" };
+        for (var i = 0; i < labels.Length; i++)
+            db.PaymentDelays.Add(new PaymentDelay { Label = labels[i], SortOrder = i, IsActive = true });
+        await db.SaveChangesAsync(ct);
     }
 
     // -------------------------------------------------------------------------

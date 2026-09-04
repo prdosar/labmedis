@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2, Package } from 'lucide-react'
 import logo from '../../assets/logo.png'
-import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto } from '../../api/types'
-import { customerOrdersApi, invoicesApi } from '../../api/endpoints'
+import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto, CustomerDto } from '../../api/types'
+import { customerOrdersApi, invoicesApi, customersApi } from '../../api/endpoints'
 import { useToast } from '../../contexts/ToastContext'
 import { ApiError } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { fmtXof } from '../../utils/format'
+import { montantXofEnLettres } from '../../utils/numberToFrenchWords'
 
 const READONLY_STATUSES = ['Terminée', 'Annulée', 'EnPréparation']
 
@@ -140,97 +141,129 @@ function BLPrintLayout({ order, printDate }: { order: CustomerOrderDto; printDat
   )
 }
 
-// ── Facture print layout (full detail with amounts + payments) ────────────────
+// ── Facture print layout (sample-based: sober B&W, montant en lettres, délais, signatures) ──
 
-function FacturePrintLayout({ order, invoice, printDate }: { order: CustomerOrderDto; invoice: InvoiceDto | null; printDate: string }) {
-  const totalPaid = invoice?.amountPaid ?? 0
-  const balanceDue = invoice?.balanceDue ?? order.totalTtc
-  const payments = invoice?.payments ?? []
+function FacturePrintLayout({ order, invoice, customer, printDate }: { order: CustomerOrderDto; invoice: InvoiceDto | null; customer: CustomerDto | null; printDate: string }) {
+  const reference = invoice?.reference ?? order.reference
+  const invoiceDateStr = invoice?.invoiceDate
+    ? new Date(invoice.invoiceDate).toLocaleDateString('fr-FR')
+    : printDate
+
+  const cellHeader: React.CSSProperties = { border: '1px solid #333', padding: '4px 8px', textAlign: 'center', fontSize: '10pt', fontWeight: 'bold' }
+  const cellBody: React.CSSProperties = { border: '1px solid #333', padding: '4px 8px', fontSize: '10pt' }
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', padding: '15mm 20mm' }}>
-      <PrintHeader title="FACTURE" reference={invoice?.reference ?? order.reference} date={printDate} />
-      <PrintCustomerBlock name={order.customerName} />
+    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', padding: '15mm 15mm', color: '#000' }}>
+      {/* Title bar */}
+      <div style={{ textAlign: 'center', border: '1px solid #333', padding: '6px', marginBottom: '10px', fontWeight: 'bold', fontSize: '12pt' }}>
+        FACTURE N° {reference}
+      </div>
+
+      {/* Header : left = LabMedis identity + logo | right = client block in bordered box */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
+        <div style={{ flex: 1, display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+          <img src={logo} alt="LabMedis" style={{ height: '55px', objectFit: 'contain' }} />
+          <div style={{ fontSize: '10pt', lineHeight: '1.4' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '11pt' }}>LABMEDIS SARL</div>
+            <div>380 Bd de la Kara</div>
+            <div>08 BP 80859</div>
+            <div>Tél : +228 92 26 99 33 / +228 72 14 08 47</div>
+            <div style={{ marginTop: '4px' }}>RCCM : TG-LOM 2019 B2318</div>
+            <div>NIF : 1001536704</div>
+          </div>
+        </div>
+
+        {/* Client box */}
+        <div style={{ width: '260px', border: '1px solid #333', padding: '6px 8px', fontSize: '9.5pt', lineHeight: '1.5' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '65px 1fr', rowGap: '2px' }}>
+            <span style={{ fontWeight: 'bold' }}>Client</span>
+            <span>: {customer?.name ?? order.customerName}</span>
+            <span style={{ fontWeight: 'bold' }}>Adresse</span>
+            <span>: {customer?.address ?? '—'}</span>
+            <span style={{ fontWeight: 'bold' }}>BP</span>
+            <span>: {customer?.postalBox ?? '—'} {customer?.city ? ` ${customer.city}` : ''}</span>
+            <span style={{ fontWeight: 'bold' }}>Tél</span>
+            <span>: {customer?.phone ?? '—'}</span>
+            <span style={{ fontWeight: 'bold' }}>Code Client</span>
+            <span>: {customer?.code ?? '—'}</span>
+            <span style={{ fontWeight: 'bold' }}>Date</span>
+            <span>: {invoiceDateStr}</span>
+            <span style={{ fontWeight: 'bold' }}>Commande N°</span>
+            <span>: {order.reference}</span>
+          </div>
+        </div>
+      </div>
 
       {/* Lines table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4px' }}>
         <thead>
-          <tr style={{ backgroundColor: '#f5f0ff' }}>
-            <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'left', fontSize: '10pt' }}>Désignation</th>
-            <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'center', fontSize: '10pt', width: '60px' }}>Qté</th>
-            <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'right', fontSize: '10pt', width: '100px' }}>Prix HT</th>
-            <th style={{ border: '1px solid #ccc', padding: '6px 10px', textAlign: 'right', fontSize: '10pt', width: '110px' }}>Total HT</th>
+          <tr>
+            <th style={{ ...cellHeader, width: '32px' }}>N°</th>
+            <th style={{ ...cellHeader, textAlign: 'left' }}>Description</th>
+            <th style={{ ...cellHeader, width: '80px' }}>PU HT</th>
+            <th style={{ ...cellHeader, width: '55px' }}>Qté</th>
+            <th style={{ ...cellHeader, width: '90px' }}>Montant HT</th>
           </tr>
         </thead>
         <tbody>
           {order.lines.map((l, i) => (
-            <tr key={l.id} style={{ backgroundColor: i % 2 === 1 ? '#fafafa' : '#fff' }}>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px' }}>
-                <div>{l.productDesignation}</div>
-                <div style={{ fontSize: '8pt', color: '#888', fontFamily: 'monospace' }}>{l.productCode}</div>
-              </td>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'center' }}>{l.quantity}</td>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'right' }}>{fmtXof(l.unitPriceHt)}</td>
-              <td style={{ border: '1px solid #e0e0e0', padding: '5px 10px', textAlign: 'right' }}>{fmtXof(l.lineTotalHt)}</td>
+            <tr key={l.id}>
+              <td style={{ ...cellBody, textAlign: 'center' }}>{i + 1}</td>
+              <td style={{ ...cellBody, textAlign: 'left' }}>{l.productDesignation}</td>
+              <td style={{ ...cellBody, textAlign: 'right' }}>{formatXofPlain(l.unitPriceHt)}</td>
+              <td style={{ ...cellBody, textAlign: 'right' }}>{l.quantity}</td>
+              <td style={{ ...cellBody, textAlign: 'right' }}>{formatXofPlain(l.lineTotalHt)}</td>
             </tr>
           ))}
+          <tr>
+            <td colSpan={4} style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>TOTAL HT</td>
+            <td style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>{formatXofPlain(order.totalHt)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4} style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>TOTAL TVA</td>
+            <td style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>{formatXofPlain(order.totalTva)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4} style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>TOTAL TTC</td>
+            <td style={{ ...cellBody, textAlign: 'right', fontWeight: 'bold' }}>{formatXofPlain(order.totalTtc)}</td>
+          </tr>
         </tbody>
       </table>
 
-      {/* Totals + payments side by side */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '32px' }}>
-        {/* Payments / acomptes */}
-        {payments.length > 0 && (
-          <div style={{ minWidth: '220px', fontSize: '10pt' }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#555', fontSize: '9pt', textTransform: 'uppercase' }}>Versements reçus</div>
-            {payments.map(p => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '3px', fontSize: '10pt' }}>
-                <span style={{ color: '#555' }}>
-                  {new Date(p.paymentDate).toLocaleDateString('fr-FR')}
-                  {p.paymentMethod ? ` (${p.paymentMethod})` : ''}
-                </span>
-                <span>{fmtXof(p.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Totals box */}
-        <div style={{ minWidth: '220px', fontSize: '10pt' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span style={{ color: '#555' }}>Total HT</span>
-            <span>{fmtXof(order.totalHt)}</span>
-          </div>
-          {order.vatApplied && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: '#555' }}>TVA 18%</span>
-              <span>{fmtXof(order.totalTva)}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '12pt', borderTop: '1px solid #333', paddingTop: '6px', marginTop: '4px', marginBottom: '8px' }}>
-            <span>Total TTC</span>
-            <span>{fmtXof(order.totalTtc)}</span>
-          </div>
-          {totalPaid > 0 && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#2a8a2a' }}>
-                <span>Acompte versé</span>
-                <span>- {fmtXof(totalPaid)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '12pt', borderTop: '2px solid #863bff', paddingTop: '6px', marginTop: '2px', color: balanceDue > 0 ? '#c00' : '#2a8a2a' }}>
-                <span>Reste à payer</span>
-                <span>{fmtXof(balanceDue)}</span>
-              </div>
-            </>
-          )}
-        </div>
+      {/* Montant en lettres */}
+      <div style={{ marginTop: '10px', fontSize: '10pt', fontStyle: 'italic' }}>
+        Arrêtée la présente facture à la somme de : {montantXofEnLettres(order.totalTtc)}.
       </div>
 
-      <div style={{ textAlign: 'center', fontSize: '8pt', color: '#aaa', borderTop: '1px solid #eee', marginTop: '24px', paddingTop: '6px' }}>
-        LabMedis SARL — {invoice?.reference ?? order.reference}
+      {/* Délais */}
+      <div style={{ marginTop: '10px', fontSize: '10pt' }}>
+        <div>Délai de livraison : {order.deliveryDelayLabel ?? '—'}</div>
+        <div>Délai de paiement : {order.paymentDelayLabel ?? '—'}</div>
+      </div>
+
+      {/* Signatures footer */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', gap: '20px', fontSize: '10pt' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '55px' }}>Le Comptable</div>
+          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', fontStyle: 'italic' }}>ITITO Kossivi</div>
+        </div>
+        <div style={{ flex: 1, textAlign: 'right' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>Le Pharmacien responsable</div>
+          <div style={{ display: 'inline-block', border: '1px solid #333', padding: '6px 10px', fontSize: '9pt', lineHeight: '1.4', textAlign: 'left' }}>
+            <div style={{ fontWeight: 'bold' }}>LABMEDIS SARL</div>
+            <div>380 Bd de la Kara</div>
+            <div>08 BP 80859 Tél : +228 92 26 99 33</div>
+            <div>pharmacien@labmedis-togo.com</div>
+          </div>
+          <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '30px', fontStyle: 'italic' }}>Dr ODOULAMI Doris</div>
+        </div>
       </div>
     </div>
   )
+}
+
+function formatXofPlain(n: number): string {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(n))
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
@@ -243,6 +276,7 @@ export function CustomerOrderDetailPage() {
 
   const [order, setOrder] = useState<CustomerOrderDto | null>(null)
   const [invoice, setInvoice] = useState<InvoiceDto | null>(null)
+  const [customer, setCustomer] = useState<CustomerDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [documents, setDocuments] = useState<CustomerOrderDocumentDto[]>([])
   const [uploadingDocType, setUploadingDocType] = useState('BonCommande')
@@ -264,6 +298,7 @@ export function CustomerOrderDetailPage() {
         if (o.invoiceId) {
           invoicesApi.getById(o.invoiceId).then(setInvoice).catch(() => null)
         }
+        customersApi.getById(o.customerId).then(setCustomer).catch(() => null)
       })
       .catch(() => toast('Commande introuvable.', 'error'))
       .finally(() => setLoading(false))
@@ -339,7 +374,7 @@ export function CustomerOrderDetailPage() {
 
       {/* ── Facture print area ── */}
       <div className={printMode === 'facture' ? 'hidden print:block' : 'hidden'}>
-        <FacturePrintLayout order={order} invoice={invoice} printDate={printDate} />
+        <FacturePrintLayout order={order} invoice={invoice} customer={customer} printDate={printDate} />
       </div>
 
       {/* ── Screen layout ── */}

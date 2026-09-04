@@ -35,6 +35,7 @@ import { WarehousesPage } from './pages/config/WarehousesPage'
 import { CountriesPage } from './pages/config/CountriesPage'
 import { CustomsRegimesPage } from './pages/config/CustomsRegimesPage'
 import { TransportTypesPage } from './pages/config/TransportTypesPage'
+import { DelaysPage } from './pages/config/DelaysPage'
 import { UsersPage } from './pages/users/UsersPage'
 import { ChartOfAccountsPage } from './pages/accounting/ChartOfAccountsPage'
 import { JournalPage } from './pages/accounting/JournalPage'
@@ -127,6 +128,7 @@ export default function App() {
               <Route path="/config/countries" element={<CountriesPage />} />
               <Route path="/config/customs-regimes" element={<CustomsRegimesPage />} />
               <Route path="/config/transport-types" element={<TransportTypesPage />} />
+              <Route path="/config/delays" element={<DelaysPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/accounting/od" element={<OdEntriesPage />} />
               <Route path="/accounting/od/new" element={<OdEntryFormPage />} />
