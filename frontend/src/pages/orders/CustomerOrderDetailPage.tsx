@@ -67,15 +67,6 @@ function PrintHeader({ title, reference, date }: { title: string; reference: str
   )
 }
 
-function PrintCustomerBlock({ name }: { name: string }) {
-  return (
-    <div style={{ marginBottom: '16px', padding: '8px 12px', border: '1px solid #e0e0e0', borderRadius: '4px', backgroundColor: '#fafafa' }}>
-      <div style={{ fontSize: '8pt', color: '#888', textTransform: 'uppercase', marginBottom: '2px' }}>Client</div>
-      <div style={{ fontSize: '11pt', fontWeight: 'bold' }}>{name}</div>
-    </div>
-  )
-}
-
 // ── BL print layout (quantities only, no prices) ────────────────────────────
 
 function fmtBLDate(s: string | null) {
