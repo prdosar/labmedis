@@ -32,3 +32,15 @@ body {
   background-color: #d1d5db;
   border-radius: 2px;
 }
+
+/* Force les couleurs à l'impression pour tous les documents (BL, factures,
+   proformas). Sans cette règle, Chrome/Edge suppriment les couleurs de
+   bordure/texte sauf si l'utilisateur coche "Graphismes en arrière-plan"
+   dans la boîte d'impression. */
+@media print {
+  html, body, * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}
