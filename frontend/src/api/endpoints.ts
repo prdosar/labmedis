@@ -57,6 +57,7 @@ import type {
   WarehouseDto,
   ProductStockInfoDto,
   InventoryReportDto,
+  NotificationSummaryDto,
 } from './types'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -343,6 +344,12 @@ export const stockMovementsApi = {
     notes: string | null
     exitDate: string | null
   }) => api.post<StockMovementDto>('/stock-movements/diverse-exit', dto),
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  getSummary: () => api.get<NotificationSummaryDto>('/notifications'),
 }
 
 // ─── Reports (inventaire, ventes, etc.) ──────────────────────────────────────

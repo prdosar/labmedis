@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom'
+import { NotificationBell } from './NotificationBell'
 
 const titles: Record<string, string> = {
   '/': 'Tableau de bord',
@@ -46,6 +47,7 @@ export function Header() {
     <header className="fixed top-0 right-0 left-64 h-14 bg-white border-b border-gray-200 flex items-center px-6 z-20">
       <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
       <div className="ml-auto flex items-center gap-3">
+        <NotificationBell />
         <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded-md">
           LabMedis · Lomé, Togo
         </span>

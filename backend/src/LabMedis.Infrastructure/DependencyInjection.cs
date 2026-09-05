@@ -95,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IOperatingExpenseService, OperatingExpenseService>();
         services.AddScoped<IFixedAssetService, FixedAssetService>();
         services.AddScoped<IInventoryReportService, InventoryReportService>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

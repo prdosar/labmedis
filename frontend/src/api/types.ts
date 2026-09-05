@@ -981,6 +981,26 @@ export interface UserDto {
   roles: string[]
 }
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+export interface NotificationItemDto {
+  type: 'PendingCustomerOrder' | 'PendingSupplierOrder' | 'ExpiringProduct' | 'LowStock' | string
+  severity: 'info' | 'warning' | 'danger' | string
+  title: string
+  message: string
+  link: string | null
+  date: string | null
+}
+
+export interface NotificationSummaryDto {
+  totalCount: number
+  pendingCustomerOrdersCount: number
+  pendingSupplierOrdersCount: number
+  expiringProductsCount: number
+  lowStockCount: number
+  items: NotificationItemDto[]
+}
+
 // ─── Reports ─────────────────────────────────────────────────────────────────
 
 export interface InventoryMovementCellDto {
