@@ -180,14 +180,14 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             "Bonjour ! Je suis l'assistant LabMedis. Pose-moi tes questions sur les produits, "
             "clients, commandes, stock, livraisons, factures ou KPIs.\n\n"
-            f"Ton chat_id : `{chat_id}`\n\n"
+            f"Ton chat_id : <code>{chat_id}</code>\n\n"
             "Commandes : /reset pour effacer l'historique.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
     else:
         await update.message.reply_text(
-            f"Accès refusé.\n\nCommunique ce chat_id à l'admin pour qu'il t'autorise :\n`{chat_id}`",
-            parse_mode="Markdown",
+            f"Accès refusé.\n\nCommunique ce chat_id à l'admin pour qu'il t'autorise :\n<code>{chat_id}</code>",
+            parse_mode="HTML",
         )
 
 
@@ -208,10 +208,10 @@ async def cmd_tools(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     if not _is_authorized(chat_id):
         return
-    lines = [f"• `{t['name']}` — {t['description'][:80]}" for t in mcp_tools_cache]
-    text = f"*{len(mcp_tools_cache)} outils MCP disponibles :*\n\n" + "\n".join(lines)
+    lines = [f"• <code>{t['name']}</code> — {t['description'][:80]}" for t in mcp_tools_cache]
+    text = f"<b>{len(mcp_tools_cache)} outils MCP disponibles :</b>\n\n" + "\n".join(lines)
     for chunk in [text[i:i + 4000] for i in range(0, len(text), 4000)]:
-        await update.message.reply_text(chunk, parse_mode="Markdown")
+        await update.message.reply_text(chunk, parse_mode="HTML")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -222,8 +222,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if not _is_authorized(chat_id):
         await update.message.reply_text(
-            f"Accès refusé. chat_id à communiquer à l'admin : `{chat_id}`",
-            parse_mode="Markdown",
+            f"Accès refusé. chat_id à communiquer à l'admin : <code>{chat_id}</code>",
+            parse_mode="HTML",
         )
         logger.warning("unauthorized chat=%s text=%s", chat_id, user_text[:100])
         return
