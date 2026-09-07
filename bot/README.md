@@ -1,6 +1,6 @@
 # Bot Telegram LabMedis
 
-Assistant conversationnel Telegram propulsé par Claude + le serveur MCP interne.
+Assistant conversationnel Telegram propulsé par OpenAI + le serveur MCP interne.
 Mode consultation uniquement : produits, stock, lots, péremption, clients, fournisseurs,
 commandes, factures, livraisons, mouvements, KPIs.
 
@@ -10,9 +10,9 @@ commandes, factures, livraisons, mouvements, KPIs.
 Utilisateur Telegram
         │
         ▼ (polling)
-labmedis-telegram-bot ────────────► API Anthropic (Claude)
+labmedis-telegram-bot ────────────► API OpenAI (Chat Completions)
         │                                    │
-        │  (client MCP interne HTTP)         │  (tool_use blocks)
+        │  (client MCP interne HTTP)         │  (tool_calls)
         ▼                                    ▼
 labmedis-mcp ─────────► labmedis-postgres (read-only)
 ```
@@ -20,9 +20,9 @@ labmedis-mcp ─────────► labmedis-postgres (read-only)
 Le bot :
 1. Reçoit un message Telegram.
 2. Vérifie que le `chat_id` est dans la whitelist.
-3. Récupère la liste des tools MCP (au démarrage, en cache).
-4. Envoie le message + tools à Claude.
-5. Si Claude demande d'appeler un tool → proxy vers le MCP local, renvoie le résultat.
+3. Récupère la liste des tools MCP (au démarrage, en cache) au format OpenAI (`type=function`).
+4. Envoie le message + tools à OpenAI.
+5. Si le modèle renvoie des `tool_calls` → proxy vers le MCP local, renvoie chaque résultat en message `role=tool`.
 6. Boucle jusqu'à obtenir une réponse texte finale, l'envoie sur Telegram.
 
 Le MCP n'est **jamais exposé publiquement** — seul le bot y accède via le réseau
@@ -36,10 +36,10 @@ Docker interne `labmedis-net`.
 - `/newbot` → nom du bot (ex : "LabMedis Assistant") → username (ex : `labmedis_assistant_bot`).
 - BotFather te donne un **token** (`123456:AAExxxxxxxxxx`) — c'est ta `TELEGRAM_BOT_TOKEN`.
 
-### 2. Obtenir ta clé Anthropic
+### 2. Obtenir ta clé OpenAI
 
-- Va sur https://console.anthropic.com → **API Keys** → **Create Key**.
-- Copie la clé (`sk-ant-api03-xxx`) — c'est ta `ANTHROPIC_API_KEY`.
+- Va sur https://platform.openai.com/api-keys → **Create new secret key**.
+- Copie la clé (`sk-...`) — c'est ta `OPENAI_API_KEY`.
 
 ### 3. Configurer le `.env` à la racine du projet
 
@@ -47,8 +47,8 @@ Ajoute ces lignes au `.env` (à la racine `LabMedis/`, pas dans `bot/`) :
 
 ```
 TELEGRAM_BOT_TOKEN=123456:AAExxxxxxxxxx
-ANTHROPIC_API_KEY=sk-ant-api03-xxx
-ANTHROPIC_MODEL=claude-sonnet-4-5
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_MODEL=gpt-4o-mini
 # Laisser VIDE au premier démarrage — tu obtiendras ton chat_id à l'étape 5
 ALLOWED_TELEGRAM_CHAT_IDS=
 ```
@@ -69,7 +69,7 @@ docker compose -f docker-compose.prod.yml logs -f telegram-bot
 
 Log attendu :
 ```
-Starting bot — model=claude-sonnet-4-5 mcp=http://mcp:8080/ allowed_chat_ids=ALL (public!)
+Starting bot — model=gpt-4o-mini mcp=http://mcp:8080/ allowed_chat_ids=ALL (public!)
 Loaded 22 MCP tools
 ```
 
@@ -111,12 +111,12 @@ Toute personne dont le `chat_id` n'est pas dans la liste reçoit un refus poli a
 | Var | Défaut | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | *(obligatoire)* | Token BotFather |
-| `ANTHROPIC_API_KEY` | *(obligatoire)* | Clé API Anthropic |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-5` | ID du modèle Claude |
+| `OPENAI_API_KEY` | *(obligatoire)* | Clé API OpenAI |
+| `OPENAI_MODEL` | `gpt-4o-mini` | ID du modèle OpenAI |
 | `MCP_URL` | `http://mcp:8080/` | URL du serveur MCP (interne) |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | *(vide)* | Chat IDs autorisés, séparés par `,` |
 | `MAX_HISTORY_MESSAGES` | `20` | Historique conversationnel max par chat |
-| `MAX_TOKENS` | `2048` | Tokens de sortie max par réponse Claude |
+| `MAX_TOKENS` | `2048` | Tokens de sortie max par réponse OpenAI |
 
 ## Ajouter un utilisateur autorisé plus tard
 
@@ -127,12 +127,12 @@ Toute personne dont le `chat_id` n'est pas dans la liste reçoit un refus poli a
 
 ## Coût
 
-Chaque message = 1+ appel Claude (plus si Claude enchaîne plusieurs outils).
-Ordre de grandeur avec Sonnet 4.5 : ~0.005–0.02 USD par question typique.
-Pour réduire les coûts, passer à Haiku 4.5 via `ANTHROPIC_MODEL=claude-haiku-4-5`.
+Chaque message = 1+ appel OpenAI (plus si le modèle enchaîne plusieurs outils).
+Ordre de grandeur avec `gpt-4o-mini` : ~0.0005–0.005 USD par question typique.
+Pour de meilleures réponses (~10-15× plus cher), passer à `OPENAI_MODEL=gpt-4o`.
 
 ## Extension future WhatsApp
 
-Le bot est structuré autour de `_run_claude_conversation()` qui ne dépend pas de
+Le bot est structuré autour de `_run_openai_conversation()` qui ne dépend pas de
 Telegram. Pour WhatsApp, garder cette fonction et remplacer la couche `python-telegram-bot`
 par `whatsapp-web.js` (Node) ou l'API officielle WhatsApp Business (webhook FastAPI).

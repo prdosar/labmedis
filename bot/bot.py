@@ -1,20 +1,20 @@
-"""Bot Telegram LabMedis — assistant conversationnel Claude + MCP.
+"""Bot Telegram LabMedis — assistant conversationnel OpenAI + MCP.
 
 Reçoit les messages Telegram, contrôle l'accès via whitelist chat_id,
-appelle l'API Anthropic avec les outils exposés par le serveur MCP interne
-(http://mcp:8080/), boucle sur les tool_use jusqu'à obtenir une réponse texte.
+appelle l'API OpenAI avec les outils exposés par le serveur MCP interne
+(http://mcp:8080/), boucle sur les tool_calls jusqu'à obtenir une réponse texte.
 """
 
 from __future__ import annotations
 
-import asyncio
+import json
 import logging
 import os
 from typing import Any
 
-from anthropic import AsyncAnthropic
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from openai import AsyncOpenAI
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -34,8 +34,8 @@ logging.basicConfig(
 logger = logging.getLogger("labmedis-bot")
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MCP_URL = os.getenv("MCP_URL", "http://mcp:8080/")
 MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
@@ -65,7 +65,7 @@ Règles de style pour tes réponses :
 # Historique conversationnel par chat (en mémoire, RAZ au redémarrage du bot).
 history: dict[int, list[dict[str, Any]]] = {}
 
-# Cache statique des tools MCP (récupéré au démarrage).
+# Cache statique des tools MCP (récupéré au démarrage, au format OpenAI).
 mcp_tools_cache: list[dict[str, Any]] = []
 
 
@@ -91,57 +91,81 @@ def _tool_result_to_text(content: Any) -> str:
 
 
 async def _fetch_mcp_tools() -> list[dict[str, Any]]:
-    """Récupère la liste des tools MCP (nom, description, input_schema) au format Anthropic."""
+    """Récupère la liste des tools MCP au format OpenAI (type=function)."""
     async with streamable_http_client(MCP_URL) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             response = await session.list_tools()
             return [
                 {
-                    "name": t.name,
-                    "description": t.description or "",
-                    "input_schema": t.input_schema,
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description or "",
+                        "parameters": t.input_schema or {"type": "object", "properties": {}},
+                    },
                 }
                 for t in response.tools
             ]
 
 
-# ── Boucle Claude + MCP ───────────────────────────────────────────────────────
+# ── Boucle OpenAI + MCP ───────────────────────────────────────────────────────
 
 
-async def _run_claude_conversation(
-    anthropic_client: AsyncAnthropic,
+async def _run_openai_conversation(
+    openai_client: AsyncOpenAI,
     messages: list[dict[str, Any]],
 ) -> str:
-    """Envoie la conversation à Claude, exécute les tool_use via MCP en boucle, retourne le texte final."""
+    """Envoie la conversation à OpenAI, exécute les tool_calls via MCP en boucle, retourne le texte final."""
     async with streamable_http_client(MCP_URL) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
             for iteration in range(MAX_TOOL_ITERATIONS):
-                response = await anthropic_client.messages.create(
-                    model=ANTHROPIC_MODEL,
+                api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+                response = await openai_client.chat.completions.create(
+                    model=OPENAI_MODEL,
                     max_tokens=MAX_TOKENS,
-                    system=SYSTEM_PROMPT,
-                    tools=mcp_tools_cache,
-                    messages=messages,
+                    tools=mcp_tools_cache or None,
+                    messages=api_messages,
                 )
+                assistant = response.choices[0].message
 
-                # Ajoute la réponse assistant à l'historique (contenu = liste de blocs).
-                messages.append({"role": "assistant", "content": response.content})
+                # Sérialise le message assistant pour l'historique
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": assistant.content,
+                }
+                if assistant.tool_calls:
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in assistant.tool_calls
+                    ]
+                messages.append(assistant_msg)
 
-                if response.stop_reason != "tool_use":
-                    # Fin de la conversation : extraire le texte.
-                    text_parts = [b.text for b in response.content if b.type == "text"]
-                    return "\n".join(text_parts).strip() or "(pas de réponse texte)"
+                if not assistant.tool_calls:
+                    return (assistant.content or "").strip() or "(pas de réponse texte)"
 
-                # Exécute tous les tool_use blocks
-                tool_results: list[dict[str, Any]] = []
-                for block in response.content:
-                    if block.type != "tool_use":
+                # Exécute tous les tool_calls
+                for tc in assistant.tool_calls:
+                    tool_name = tc.function.name
+                    try:
+                        tool_input = json.loads(tc.function.arguments or "{}")
+                    except json.JSONDecodeError as e:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": f"ERREUR : arguments JSON invalides ({e})",
+                        })
                         continue
-                    tool_name = block.name
-                    tool_input = block.input or {}
+
                     logger.info(
                         "call_tool name=%s args=%s (iter %d)",
                         tool_name, tool_input, iteration,
@@ -149,23 +173,16 @@ async def _run_claude_conversation(
                     try:
                         result = await session.call_tool(tool_name, tool_input)
                         result_text = _tool_result_to_text(result.content)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result_text or "(résultat vide)",
-                        })
                     except Exception as e:  # noqa: BLE001
                         logger.exception("tool call failed: %s", tool_name)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": f"ERREUR côté outil : {e}",
-                            "is_error": True,
-                        })
+                        result_text = f"ERREUR côté outil : {e}"
 
-                messages.append({"role": "user", "content": tool_results})
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text or "(résultat vide)",
+                    })
 
-            # Boucle trop longue — on renvoie un message d'excuse.
             return "Désolé, la requête dépasse la limite d'itérations. Reformule plus simplement ou utilise /reset."
 
 
@@ -208,10 +225,32 @@ async def cmd_tools(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     if not _is_authorized(chat_id):
         return
-    lines = [f"• <code>{t['name']}</code> — {t['description'][:80]}" for t in mcp_tools_cache]
+    lines = [
+        f"• <code>{t['function']['name']}</code> — {t['function']['description'][:80]}"
+        for t in mcp_tools_cache
+    ]
     text = f"<b>{len(mcp_tools_cache)} outils MCP disponibles :</b>\n\n" + "\n".join(lines)
     for chunk in [text[i:i + 4000] for i in range(0, len(text), 4000)]:
         await update.message.reply_text(chunk, parse_mode="HTML")
+
+
+def _trim_history(chat_id: int) -> None:
+    """Trim l'historique en coupant sur une frontière saine (un message user texte).
+
+    OpenAI rejette un historique qui commence par un `tool` orphelin ou un `assistant`
+    avec `tool_calls` sans les réponses. On cherche le premier vrai tour utilisateur
+    dans la queue.
+    """
+    msgs = history.get(chat_id, [])
+    if len(msgs) <= MAX_HISTORY_MESSAGES:
+        return
+    cut = len(msgs) - MAX_HISTORY_MESSAGES
+    while cut < len(msgs):
+        m = msgs[cut]
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            break
+        cut += 1
+    history[chat_id] = msgs[cut:]
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -234,8 +273,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     messages.append({"role": "user", "content": user_text})
 
     try:
-        anthropic_client: AsyncAnthropic = context.application.bot_data["anthropic"]
-        final_text = await _run_claude_conversation(anthropic_client, messages)
+        openai_client: AsyncOpenAI = context.application.bot_data["openai"]
+        final_text = await _run_openai_conversation(openai_client, messages)
     except Exception as e:  # noqa: BLE001
         logger.exception("error handling message chat=%s", chat_id)
         # On retire le dernier message user pour éviter d'empoisonner l'historique.
@@ -243,9 +282,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"Erreur : {e}")
         return
 
-    # Trim historique.
-    if len(messages) > MAX_HISTORY_MESSAGES:
-        history[chat_id] = messages[-MAX_HISTORY_MESSAGES:]
+    _trim_history(chat_id)
 
     # Split si > 4096 (limite Telegram).
     for chunk in [final_text[i:i + 4000] for i in range(0, len(final_text), 4000)]:
@@ -256,7 +293,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def _post_init(app: Application) -> None:
-    """Charge les tools MCP au démarrage + instancie le client Anthropic."""
+    """Charge les tools MCP au démarrage + instancie le client OpenAI."""
     logger.info("Fetching MCP tools from %s...", MCP_URL)
     try:
         tools = await _fetch_mcp_tools()
@@ -265,7 +302,7 @@ async def _post_init(app: Application) -> None:
     except Exception as e:  # noqa: BLE001
         logger.exception("Failed to load MCP tools — bot will start but tool calls will fail: %s", e)
 
-    app.bot_data["anthropic"] = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    app.bot_data["openai"] = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 
 def main() -> None:
@@ -282,7 +319,7 @@ def main() -> None:
 
     logger.info(
         "Starting bot — model=%s mcp=%s allowed_chat_ids=%s",
-        ANTHROPIC_MODEL, MCP_URL,
+        OPENAI_MODEL, MCP_URL,
         sorted(ALLOWED_CHAT_IDS) if ALLOWED_CHAT_IDS else "ALL (public!)",
     )
     app.run_polling(allowed_updates=Update.ALL_TYPES)
