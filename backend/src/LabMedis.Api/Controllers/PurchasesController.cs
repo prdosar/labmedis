@@ -14,8 +14,12 @@ public class PurchasesController : ControllerBase
     public PurchasesController(IPurchaseService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<PurchaseDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<PurchaseDto>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 10,
+        [FromQuery] bool includeUnlinked = false,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, includeUnlinked, ct));
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<PurchaseDto>> GetById(long id, CancellationToken ct)

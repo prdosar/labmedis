@@ -21,10 +21,10 @@ const CATEGORIES: {
     linkAll: '/orders/suppliers' },
   { key: 'expiringProductsCount', matches: t => t === 'ExpiringProduct',
     label: 'Produits proches péremption (< 6 mois)', icon: <Clock size={13} className="text-amber-500" />,
-    linkAll: '/products' },
+    linkAll: '/notifications/expiring' },
   { key: 'lowStockCount', matches: t => t === 'LowStock',
     label: 'Stock faible', icon: <PackageX size={13} className="text-red-500" />,
-    linkAll: '/products' },
+    linkAll: '/notifications/low-stock' },
 ]
 
 function severityDot(sev: string) {
@@ -164,13 +164,16 @@ export function NotificationBell() {
                         </button>
                       </li>
                     ))}
-                    {hiddenCount > 0 && cat.linkAll && (
+                    {cat.linkAll && (
                       <li>
                         <button
                           onClick={() => { setOpen(false); navigate(cat.linkAll!) }}
                           className="w-full text-left px-4 py-2 text-xs text-brand-600 hover:bg-brand-50 hover:text-brand-700 font-medium"
                         >
-                          + {hiddenCount} autre(s) — voir tout
+                          {hiddenCount > 0
+                            ? `Voir tout (${count} au total, +${hiddenCount} non affiché${hiddenCount > 1 ? 's' : ''}) →`
+                            : `Voir tout →`
+                          }
                         </button>
                       </li>
                     )}

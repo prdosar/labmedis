@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, Printer, Mail, CheckCircle, ArrowLeft } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import type { ProductDto, SupplierDto } from '../../api/types'
@@ -32,7 +32,15 @@ export function SupplierOrderFormPage() {
   const { id } = useParams<{ id?: string }>()
   const isEdit = !!id && id !== 'new'
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { toast } = useToast()
+
+  // Prefill via query params (depuis la page « Stock faible » notamment)
+  const prefillSupplierId = searchParams.get('prefillSupplierId') ?? ''
+  const prefillProductId = searchParams.get('prefillProductId') ?? ''
+  const prefillQuantity = searchParams.get('prefillQuantity') ?? ''
+  const prefillOrderUnit = searchParams.get('prefillOrderUnit') ?? ''
+  const prefillUnitsPerCarton = searchParams.get('prefillUnitsPerCarton') ?? ''
 
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([])
   const [products, setProducts] = useState<ProductDto[]>([])
@@ -58,6 +66,24 @@ export function SupplierOrderFormPage() {
       .then(([s, p]) => {
         setSuppliers(s)
         setProducts(p)
+        // Prefill après le chargement des références (uniquement en création)
+        if (!isEdit && prefillSupplierId && !supplierId) {
+          setSupplierId(prefillSupplierId)
+          prevSupplierRef.current = prefillSupplierId // évite le reset des lignes par l'effect qui watch supplierId
+          if (prefillProductId) {
+            const product = p.find(pp => String(pp.id) === prefillProductId)
+            const autoUnits = prefillUnitsPerCarton
+              || (product?.packagingUnitsPerPackaging ? String(product.packagingUnitsPerPackaging) : '')
+            setLines([{
+              productId: prefillProductId,
+              quantity: prefillQuantity || '1',
+              orderUnit: prefillOrderUnit || 'Carton',
+              unitsPerCarton: autoUnits,
+            }])
+          }
+          // Nettoyer l'URL pour éviter un re-prefill à la navigation interne
+          setSearchParams({}, { replace: true })
+        }
       })
       .finally(() => setInitialLoading(false))
   }, [])

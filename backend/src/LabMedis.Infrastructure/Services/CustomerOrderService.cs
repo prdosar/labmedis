@@ -342,17 +342,19 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
     {
         var order = await DbSet
             .Include(o => o.Customer).ThenInclude(c => c!.ChartAccount)
-            .Include(o => o.Invoice).ThenInclude(i => i!.Lines)
+            .Include(o => o.Invoice).ThenInclude(i => i!.Lines).ThenInclude(l => l.DeliveryLines)
             .Include(o => o.Lines).ThenInclude(l => l.Product)
             .FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new DomainException($"Commande introuvable (Id={id}).");
 
         if (order.Status != CustomerOrderStatus.EnPréparation)
             throw new DomainException("Seule une commande en préparation peut être clôturée. Passez d'abord par la préparation.");
+        if (order.Invoice is null)
+            throw new DomainException("La commande n'a pas de facture associée. Relancez la préparation.");
 
         var deliveryDate = dto?.DeliveryDate?.Date ?? DateTime.UtcNow.Date;
 
-        // 1. Consume stock + create StockMovements
+        // 1. Load lot allocations produced by the preparation step
         var lotLines = await DbContext.CustomerOrderLotLines
             .Include(l => l.PurchaseLine)
             .Where(l => l.CustomerOrderId == id && !l.IsDeleted)
@@ -361,9 +363,30 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         if (!lotLines.Any())
             throw new DomainException("Aucune ligne de préparation trouvée. Relancez la préparation.");
 
+        // 2. Create the Delivery BL for traceability (one BL per closed order).
+        // Reference dérivée de celle de la commande ; unique par construction (1:1).
+        var delivery = new Delivery
+        {
+            Reference = $"BL-{order.Reference}",
+            DeliveryDate = deliveryDate,
+            InvoiceId = order.Invoice.Id,
+            Invoice = order.Invoice,
+            RecipientName = order.Customer?.Name,
+            DeliveryAddress = order.Customer?.Address,
+            Notes = $"BL généré à la clôture de la commande {order.Reference}",
+        };
+        DbContext.Deliveries.Add(delivery);
+
+        // 3. For each lot allocation : add delivery line (consomme le stock) + StockMovement pour reporting
         foreach (var lotLine in lotLines)
         {
-            lotLine.PurchaseLine!.ConsumeStock(lotLine.QuantityAllocated);
+            var invoiceLine = order.Invoice.Lines.FirstOrDefault(l => l.ProductId == lotLine.ProductId)
+                ?? throw new DomainException(
+                    $"Ligne de facture introuvable pour le produit {lotLine.ProductId} — la préparation est incohérente avec la facture.");
+
+            // Delivery.AddLine → ConsumeStock du lot + registre sur la ligne de facture
+            delivery.AddLine(invoiceLine, lotLine.PurchaseLine!, lotLine.QuantityAllocated);
+
             DbContext.StockMovements.Add(new StockMovement
             {
                 ProductId = lotLine.ProductId,
@@ -377,15 +400,19 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             });
         }
 
-        // 2. Issue Invoice
-        order.Invoice?.Issue();
-        if (order.Invoice is not null && dto?.DeliveryDate.HasValue == true)
+        // 4. Ship + MarkDelivered : le BL passe directement en état livré (clôture = livraison effective)
+        delivery.Ship();
+        delivery.MarkDelivered();
+
+        // 5. Issue Invoice
+        order.Invoice.Issue();
+        if (dto?.DeliveryDate.HasValue == true)
             order.Invoice.InvoiceDate = deliveryDate;
 
-        // 3. Accounting entries
+        // 6. Accounting entries
         await PostSaleAccountingAsync(order, ct);
 
-        // 4. Complete the order
+        // 7. Complete the order
         order.Complete();
         await DbContext.SaveChangesAsync(ct);
 

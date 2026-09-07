@@ -5,7 +5,12 @@ namespace LabMedis.Application.Services;
 
 public interface IPurchaseService
 {
-    Task<PagedResult<PurchaseDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Liste paginée des arrivages. Par défaut n'inclut que les arrivages liés à un bon de commande
+    /// fournisseur (vrais arrivages) ; passer <c>includeUnlinked=true</c> pour aussi voir les
+    /// arrivages techniques (inventaire d'ouverture notamment).
+    /// </summary>
+    Task<PagedResult<PurchaseDto>> GetAllAsync(int page = 1, int size = 10, bool includeUnlinked = false, CancellationToken cancellationToken = default);
     Task<PurchaseDto?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
     Task<PurchaseDto> CreateAsync(PurchaseCreateDto dto, CancellationToken cancellationToken = default);
     Task<PurchaseDto?> UpdateAsync(long id, PurchaseUpdateDto dto, CancellationToken cancellationToken = default);

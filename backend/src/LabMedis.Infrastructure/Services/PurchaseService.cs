@@ -18,11 +18,14 @@ public class PurchaseService : BaseRepository<Purchase>, IPurchaseService
         _logger = logger;
     }
 
-    public async Task<PagedResult<PurchaseDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<PurchaseDto>> GetAllAsync(int page = 1, int size = 10, bool includeUnlinked = false, CancellationToken cancellationToken = default)
     {
         var skip = (page - 1) * size;
-        var total = await DbSet.CountAsync(cancellationToken);
-        var items = await DbSet
+        // Un arrivage est un vrai arrivage fournisseur uniquement s'il est rattaché à un BC.
+        // Les Purchase sans SupplierOrderId proviennent de l'inventaire d'ouverture (contrepartie technique).
+        var baseQ = includeUnlinked ? DbSet : DbSet.Where(p => p.SupplierOrderId != null);
+        var total = await baseQ.CountAsync(cancellationToken);
+        var items = await baseQ
             .Include(p => p.Supplier)
             .Include(p => p.Lines).ThenInclude(l => l.Product)
             .Include(p => p.Lines).ThenInclude(l => l.Transports).ThenInclude(t => t.TransportType)

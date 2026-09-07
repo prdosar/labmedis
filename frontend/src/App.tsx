@@ -59,6 +59,8 @@ import { ReceiveInvoicePage } from './pages/orders/ReceiveInvoicePage'
 import { ReceiveGoodsPage } from './pages/orders/ReceiveGoodsPage'
 import { ReceptionsPage } from './pages/orders/ReceptionsPage'
 import { CustomerOrderPreparationPage } from './pages/orders/CustomerOrderPreparationPage'
+import { ExpiringProductsPage } from './pages/notifications/ExpiringProductsPage'
+import { LowStockPage } from './pages/notifications/LowStockPage'
 
 function ProtectedRoutes() {
   const { user, isLoading } = useAuth()
@@ -121,6 +123,8 @@ export default function App() {
               <Route path="/stock/supplier-returns" element={<SupplierReturnsPage />} />
               <Route path="/stock/diverse-exits" element={<DiverseExitsPage />} />
               <Route path="/stock/inventory-report" element={<InventoryReportPage />} />
+              <Route path="/notifications/expiring" element={<ExpiringProductsPage />} />
+              <Route path="/notifications/low-stock" element={<LowStockPage />} />
               <Route path="/config/categories" element={<CategoriesPage />} />
               <Route path="/config/therapeutic-classes" element={<TherapeuticClassesPage />} />
               <Route path="/config/product-forms" element={<ProductFormsPage />} />

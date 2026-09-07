@@ -21,4 +21,29 @@ public class NotificationsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<NotificationSummaryDto>> GetSummary(CancellationToken ct = default)
         => Ok(await _notifications.GetSummaryAsync(ct));
+
+    /// <summary>
+    /// Liste paginée des lots proches péremption pour la page dédiée.
+    /// </summary>
+    [HttpGet("expiring-products")]
+    public async Task<ActionResult<ExpiringProductsPageDto>> GetExpiringProducts(
+        [FromQuery] int? windowMonths,
+        [FromQuery] long? supplierId,
+        [FromQuery] long? warehouseId,
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 25,
+        CancellationToken ct = default)
+        => Ok(await _notifications.GetExpiringProductsAsync(windowMonths, supplierId, warehouseId, page, size, ct));
+
+    /// <summary>
+    /// Liste paginée des produits en stock faible pour la page dédiée.
+    /// </summary>
+    [HttpGet("low-stock")]
+    public async Task<ActionResult<LowStockPageDto>> GetLowStock(
+        [FromQuery] long? supplierId,
+        [FromQuery] long? categoryId,
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 25,
+        CancellationToken ct = default)
+        => Ok(await _notifications.GetLowStockProductsAsync(supplierId, categoryId, page, size, ct));
 }

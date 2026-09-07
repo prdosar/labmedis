@@ -58,6 +58,9 @@ import type {
   ProductStockInfoDto,
   InventoryReportDto,
   NotificationSummaryDto,
+  ExpiringProductsPageDto,
+  LowStockPageDto,
+  DashboardSummaryDto,
 } from './types'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -212,8 +215,8 @@ export const productsApi = {
 // ─── Purchase ────────────────────────────────────────────────────────────────
 
 export const purchasesApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<PurchaseDto>>(`/purchases?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, includeUnlinked = false) =>
+    api.get<PagedResult<PurchaseDto>>(`/purchases?page=${page}&size=${size}${includeUnlinked ? '&includeUnlinked=true' : ''}`),
   getById: (id: number) => api.get<PurchaseDto>(`/purchases/${id}`),
   create: (dto: object) => api.post<PurchaseDto>('/purchases', dto),
   update: (id: number, dto: object) => api.put<PurchaseDto>(`/purchases/${id}`, dto),
@@ -350,6 +353,48 @@ export const stockMovementsApi = {
 
 export const notificationsApi = {
   getSummary: () => api.get<NotificationSummaryDto>('/notifications'),
+  getExpiringProducts: (params: {
+    windowMonths?: number
+    supplierId?: number
+    warehouseId?: number
+    page?: number
+    size?: number
+  } = {}) => {
+    const qs = new URLSearchParams({
+      page: String(params.page ?? 1),
+      size: String(params.size ?? 25),
+    })
+    if (params.windowMonths) qs.set('windowMonths', String(params.windowMonths))
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    if (params.warehouseId) qs.set('warehouseId', String(params.warehouseId))
+    return api.get<ExpiringProductsPageDto>(`/notifications/expiring-products?${qs}`)
+  },
+  getLowStock: (params: {
+    supplierId?: number
+    categoryId?: number
+    page?: number
+    size?: number
+  } = {}) => {
+    const qs = new URLSearchParams({
+      page: String(params.page ?? 1),
+      size: String(params.size ?? 25),
+    })
+    if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    if (params.categoryId) qs.set('categoryId', String(params.categoryId))
+    return api.get<LowStockPageDto>(`/notifications/low-stock?${qs}`)
+  },
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export const dashboardApi = {
+  getSummary: (params: { dateFrom?: string; dateTo?: string } = {}) => {
+    const qs = new URLSearchParams()
+    if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+    if (params.dateTo) qs.set('dateTo', params.dateTo)
+    const qsStr = qs.toString()
+    return api.get<DashboardSummaryDto>(`/dashboard/summary${qsStr ? '?' + qsStr : ''}`)
+  },
 }
 
 // ─── Reports (inventaire, ventes, etc.) ──────────────────────────────────────

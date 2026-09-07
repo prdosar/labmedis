@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Eye, X } from 'lucide-react'
 import { supplierReturnsApi, suppliersApi, productsApi, warehousesApi } from '../../api/endpoints'
 import type { SupplierReturnDto, SupplierDto, ProductDto, WarehouseDto } from '../../api/types'
@@ -71,6 +72,7 @@ const PAGE_SIZE = 20
 
 export function SupplierReturnsPage() {
   const { toast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<SupplierReturnDto[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -120,6 +122,49 @@ export function SupplierReturnsPage() {
       setProducts(p)
     })
   }, [showForm])
+
+  // Prefill via query params (depuis la page « Produits proches péremption »)
+  useEffect(() => {
+    const productId = searchParams.get('prefillProductId')
+    const purchaseLineId = searchParams.get('prefillPurchaseLineId')
+    if (!productId && !purchaseLineId) return
+
+    const lot = searchParams.get('prefillLot') ?? ''
+    const qty = searchParams.get('prefillQuantity') ?? ''
+    const reasonQp = searchParams.get('prefillReason') ?? ''
+    const warehouseIdQp = searchParams.get('prefillWarehouseId') ?? ''
+    const supplierIdQp = searchParams.get('prefillSupplierId') ?? ''
+
+    // Charger les produits pour récupérer le code/désignation
+    productsApi.getForSelect().then(pList => {
+      const product = pList.find(p => String(p.id) === productId)
+      setSupplierId(supplierIdQp)
+      setReturnDate(today())
+      setCurrency('EUR')
+      setExchangeRate('655.957')
+      setReason(reasonQp)
+      setNotes('')
+      setCreateCreditNote(true)
+      setLines([{
+        _id: ++lineCounter,
+        productId: productId ?? '',
+        productCode: product?.code ?? '',
+        productDesignation: product?.designation ?? '',
+        purchaseLineId: purchaseLineId ?? '',
+        lotNumber: lot,
+        warehouseId: warehouseIdQp,
+        warehouseName: '',
+        quantityReturned: qty,
+        unitCostForeign: '0',
+        unitCostXof: '0',
+      }])
+      setShowForm(true)
+      setDetail(null)
+    })
+
+    // Nettoyer l'URL pour éviter un re-prefill à la navigation interne
+    setSearchParams({}, { replace: true })
+  }, [])
 
   const openForm = () => {
     setSupplierId('')

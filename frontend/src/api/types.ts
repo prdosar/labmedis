@@ -1001,6 +1001,67 @@ export interface NotificationSummaryDto {
   items: NotificationItemDto[]
 }
 
+export interface ExpiringProductRowDto {
+  purchaseLineId: number
+  productId: number
+  productCode: string
+  productDesignation: string
+  lotNumber: string
+  expirationDate: string
+  daysRemaining: number
+  quantityRemaining: number
+  unitsPerCarton: number
+  supplierId: number | null
+  supplierName: string | null
+  warehouseId: number | null
+  warehouseName: string | null
+}
+
+export interface ExpiringProductsPageDto {
+  items: ExpiringProductRowDto[]
+  totalCount: number
+  windowMonths: number
+}
+
+export interface LowStockRowDto {
+  productId: number
+  productCode: string
+  productDesignation: string
+  stockUnits: number
+  stockCartons: number
+  unitsPerCarton: number
+  thresholdUnits: number
+  thresholdCartons: number
+  isCartonBased: boolean
+  supplierId: number | null
+  supplierName: string | null
+  categoryId: number | null
+  categoryName: string | null
+}
+
+export interface LowStockPageDto {
+  items: LowStockRowDto[]
+  totalCount: number
+  lowStockCartonsThreshold: number
+  lowStockUnitsThreshold: number
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export interface DashboardSummaryDto {
+  dateFrom: string
+  dateTo: string
+  supplierInvoicesCount: number
+  supplierInvoicesTotalXof: number
+  salesCount: number
+  salesTotalXof: number
+  deliveriesCount: number
+  stockMovementsCount: number
+  productsCount: number
+  suppliersCount: number
+  customersCount: number
+}
+
 // ─── Reports ─────────────────────────────────────────────────────────────────
 
 export interface InventoryMovementCellDto {
