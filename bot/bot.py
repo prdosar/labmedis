@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import date
 from typing import Any
 
 from mcp import ClientSession
@@ -47,8 +48,16 @@ ALLOWED_CHAT_IDS: set[int] = {
     if x.strip()
 }
 
-SYSTEM_PROMPT = """Tu es l'assistant LabMedis, société grossiste dépositaire pharmaceutique basée à Lomé (Togo).
+SYSTEM_PROMPT_TEMPLATE = """Tu es l'assistant LabMedis, société grossiste dépositaire pharmaceutique basée à Lomé (Togo).
 Tu réponds aux questions du personnel sur : produits, stock, lots, dates de péremption, fournisseurs, clients, commandes clients et fournisseurs, factures, livraisons, mouvements d'inventaire, KPIs business.
+
+Date du jour : {today} (YYYY-MM-DD). Utilise-la pour résoudre toute expression temporelle relative :
+- "aujourd'hui" → {today}
+- "hier" → date de la veille
+- "ce mois" / "ce mois-ci" → du 1er du mois courant à {today}
+- "le mois dernier" → du 1er au dernier jour du mois précédent
+- "cette année" → du 1er janvier de l'année courante à {today}
+Passe systématiquement les dates aux outils au format YYYY-MM-DD.
 
 Tu disposes d'outils MCP en lecture seule pour interroger la base de données. Appelle-les dès que la question porte sur des données réelles ; n'invente rien.
 
@@ -61,6 +70,10 @@ Règles de style pour tes réponses :
 - Si un outil ne retourne rien, dis-le clairement au lieu d'inventer.
 - Si la question est ambiguë (ex : "les commandes de Toto" et plusieurs clients contiennent "Toto"), demande une précision.
 """
+
+
+def _system_prompt() -> str:
+    return SYSTEM_PROMPT_TEMPLATE.format(today=date.today().isoformat())
 
 # Historique conversationnel par chat (en mémoire, RAZ au redémarrage du bot).
 history: dict[int, list[dict[str, Any]]] = {}
@@ -122,7 +135,7 @@ async def _run_openai_conversation(
             await session.initialize()
 
             for iteration in range(MAX_TOOL_ITERATIONS):
-                api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+                api_messages = [{"role": "system", "content": _system_prompt()}] + messages
                 response = await openai_client.chat.completions.create(
                     model=OPENAI_MODEL,
                     max_tokens=MAX_TOKENS,
