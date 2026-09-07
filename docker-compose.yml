@@ -55,6 +55,40 @@ services:
     networks:
       - labmedis-net
 
+  mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mcp
+    container_name: labmedis-mcp
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=labmedis_dev_password"
+    ports:
+      - "8083:8080"
+    networks:
+      - labmedis-net
+
+  telegram-bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: labmedis-telegram-bot
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      MCP_URL: http://mcp:8080/
+      ALLOWED_TELEGRAM_CHAT_IDS: ${ALLOWED_TELEGRAM_CHAT_IDS:-}
+    networks:
+      - labmedis-net
+
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: labmedis-pgadmin

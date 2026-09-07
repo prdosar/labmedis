@@ -4,5 +4,6 @@
     <Project Path="src/LabMedis.Application/LabMedis.Application.csproj" />
     <Project Path="src/LabMedis.Domain/LabMedis.Domain.csproj" />
     <Project Path="src/LabMedis.Infrastructure/LabMedis.Infrastructure.csproj" />
+    <Project Path="src/LabMedis.Mcp/LabMedis.Mcp.csproj" />
   </Folder>
 </Solution>
