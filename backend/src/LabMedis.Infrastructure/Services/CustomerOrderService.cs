@@ -13,12 +13,18 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
 {
     private readonly IFileStorageService _fileStorage;
     private readonly IEmailService _emailService;
+    private readonly ITelegramNotificationService _telegram;
 
-    public CustomerOrderService(AppDbContext dbContext, IFileStorageService fileStorage, IEmailService emailService)
+    public CustomerOrderService(
+        AppDbContext dbContext,
+        IFileStorageService fileStorage,
+        IEmailService emailService,
+        ITelegramNotificationService telegram)
         : base(dbContext)
     {
         _fileStorage = fileStorage;
         _emailService = emailService;
+        _telegram = telegram;
     }
 
     // ── Queries ─────────────────────────────────────────────────────────────────
@@ -123,6 +129,8 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         }
 
         await DbContext.SaveChangesAsync(ct);
+
+        await _telegram.NotifyCustomerOrderCreatedAsync(order.Id, ct);
 
         return await GetByIdAsync(order.Id, ct) ?? throw new InvalidOperationException("Order not found after creation.");
     }
@@ -415,6 +423,11 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         // 7. Complete the order
         order.Complete();
         await DbContext.SaveChangesAsync(ct);
+
+        // 8. Notifs Telegram : commande livrée + stock/péremption sur les produits impactés
+        var impactedProductIds = lotLines.Select(l => l.ProductId).Distinct().ToList();
+        await _telegram.NotifyCustomerOrderCompletedAsync(id, ct);
+        await _telegram.NotifyStockChangesAsync(impactedProductIds, ct);
 
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }

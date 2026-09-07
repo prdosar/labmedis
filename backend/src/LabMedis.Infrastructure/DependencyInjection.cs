@@ -98,6 +98,11 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();
 
+        // TelegramNotificationService : appelle api.telegram.org via HttpClient
+        // No-op silencieux si TELEGRAM_BOT_TOKEN ou ALLOWED_TELEGRAM_CHAT_IDS
+        // n'est pas défini (utile en dev).
+        services.AddHttpClient<ITelegramNotificationService, TelegramNotificationService>();
+
         return services;
     }
 

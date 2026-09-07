@@ -39,6 +39,10 @@ services:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=${POSTGRES_PASSWORD:-labmedis_dev_password}"
       UploadPath: /app/uploads
       UploadBaseUrl: /uploads
+      # Push notifications vers Telegram (mêmes valeurs que le service telegram-bot).
+      # Si l'une des deux est vide, TelegramNotificationService est no-op.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ALLOWED_TELEGRAM_CHAT_IDS: ${ALLOWED_TELEGRAM_CHAT_IDS:-}
     ports:
       - "8082:8080"
     volumes:
