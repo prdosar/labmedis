@@ -267,8 +267,15 @@ export const invoicesApi = {
 // ─── Delivery ────────────────────────────────────────────────────────────────
 
 export const deliveriesApi = {
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<DeliveryDto>>(`/deliveries?page=${page}&size=${size}`),
+  getAll: (params: { page?: number; size?: number; customerId?: number; dateFrom?: string; dateTo?: string } = {}) => {
+    const qs = new URLSearchParams()
+    qs.set('page', String(params.page ?? 1))
+    qs.set('size', String(params.size ?? 10))
+    if (params.customerId) qs.set('customerId', String(params.customerId))
+    if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+    if (params.dateTo) qs.set('dateTo', params.dateTo)
+    return api.get<PagedResult<DeliveryDto>>(`/deliveries?${qs}`)
+  },
   getById: (id: number) => api.get<DeliveryDto>(`/deliveries/${id}`),
   create: (dto: object) => api.post<DeliveryDto>('/deliveries', dto),
   update: (id: number, dto: object) => api.put<DeliveryDto>(`/deliveries/${id}`, dto),

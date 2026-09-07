@@ -514,6 +514,8 @@ export interface DeliveryDto {
   deliveryDate: string
   invoiceId: number
   invoiceReference: string | null
+  customerId: number | null
+  customerName: string | null
   status: string
   deliveryAddress: string | null
   recipientName: string | null

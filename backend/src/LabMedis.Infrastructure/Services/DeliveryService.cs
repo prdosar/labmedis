@@ -18,14 +18,24 @@ public class DeliveryService : BaseRepository<Delivery>, IDeliveryService
         _logger = logger;
     }
 
-    public async Task<PagedResult<DeliveryDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<DeliveryDto>> GetAllAsync(int page = 1, int size = 10, long? customerId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken cancellationToken = default)
     {
         var skip = (page - 1) * size;
-        var total = await DbSet.CountAsync(cancellationToken);
-        var items = await DbSet
-            .Include(d => d.Invoice)
+        var q = DbSet
+            .Include(d => d.Invoice).ThenInclude(i => i!.Customer)
             .Include(d => d.Lines).ThenInclude(l => l.PurchaseLine)
             .Include(d => d.Lines).ThenInclude(l => l.InvoiceLine).ThenInclude(il => il!.Product)
+            .AsQueryable();
+
+        if (customerId.HasValue)
+            q = q.Where(d => d.Invoice != null && d.Invoice.CustomerId == customerId.Value);
+        if (dateFrom.HasValue)
+            q = q.Where(d => d.DeliveryDate >= dateFrom.Value.Date);
+        if (dateTo.HasValue)
+            q = q.Where(d => d.DeliveryDate < dateTo.Value.Date.AddDays(1));
+
+        var total = await q.CountAsync(cancellationToken);
+        var items = await q
             .OrderByDescending(d => d.DeliveryDate)
             .Skip(skip).Take(size)
             .ToListAsync(cancellationToken);
@@ -163,7 +173,7 @@ public class DeliveryService : BaseRepository<Delivery>, IDeliveryService
 
     private async Task<Delivery?> LoadAggregateAsync(long id, CancellationToken ct)
         => await DbSet
-            .Include(d => d.Invoice)
+            .Include(d => d.Invoice).ThenInclude(i => i!.Customer)
             .Include(d => d.Lines).ThenInclude(l => l.PurchaseLine)
             .Include(d => d.Lines).ThenInclude(l => l.InvoiceLine).ThenInclude(il => il!.Product)
             .Include(d => d.Lines).ThenInclude(l => l.InvoiceLine).ThenInclude(il => il!.DeliveryLines)
@@ -172,6 +182,7 @@ public class DeliveryService : BaseRepository<Delivery>, IDeliveryService
     private static DeliveryDto ToDto(Delivery d) => new(
         d.Id, d.Reference, d.DeliveryDate,
         d.InvoiceId, d.Invoice?.Reference,
+        d.Invoice?.CustomerId, d.Invoice?.Customer?.Name,
         d.Status.ToString(),
         d.DeliveryAddress, d.RecipientName, d.CarrierName, d.TrackingNumber, d.Notes,
         d.Lines.Select(ToLineDto).ToList(),

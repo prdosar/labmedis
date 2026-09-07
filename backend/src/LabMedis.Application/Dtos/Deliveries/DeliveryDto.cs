@@ -6,6 +6,8 @@ public record DeliveryDto(
     DateTime DeliveryDate,
     long InvoiceId,
     string? InvoiceReference,
+    long? CustomerId,
+    string? CustomerName,
     string Status,
     string? DeliveryAddress,
     string? RecipientName,

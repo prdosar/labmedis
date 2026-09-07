@@ -14,8 +14,14 @@ public class DeliveriesController : ControllerBase
     public DeliveriesController(IDeliveryService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<DeliveryDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<DeliveryDto>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 10,
+        [FromQuery] long? customerId = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, customerId, dateFrom, dateTo, ct));
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<DeliveryDto>> GetById(long id, CancellationToken ct)
