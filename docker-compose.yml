@@ -6,7 +6,12 @@ services:
     environment:
       POSTGRES_DB: labmedis
       POSTGRES_USER: labmedis
-      POSTGRES_PASSWORD: labmedis_dev_password
+      # Lu depuis .env sur prod (le volume postgres y a été init avec un
+      # password différent de labmedis_dev_password). Fallback = valeur dev.
+      # Postgres n'écrase pas le password au démarrage suivant : la valeur ici
+      # n'est utilisée QU'à l'init du volume, mais rester cohérent évite les
+      # confusions.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labmedis_dev_password}
     ports:
       - "5433:5432"
     volumes:
@@ -30,7 +35,8 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=labmedis_dev_password"
+      # cf. commentaire postgres : password lu depuis .env sur prod.
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=labmedis;Username=labmedis;Password=${POSTGRES_PASSWORD:-labmedis_dev_password}"
       UploadPath: /app/uploads
       UploadBaseUrl: /uploads
     ports:
