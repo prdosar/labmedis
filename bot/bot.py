@@ -41,6 +41,10 @@ MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
 MAX_TOOL_ITERATIONS = 8  # garde-fou anti-boucle infinie
 
+# Annonce Telegram au démarrage du bot (envoyée à chaque chat_id autorisé).
+# Désactivable pour les tests via TELEGRAM_STARTUP_ANNOUNCE=off.
+STARTUP_ANNOUNCE_ENABLED = os.getenv("TELEGRAM_STARTUP_ANNOUNCE", "on").lower() != "off"
+
 ALLOWED_CHAT_IDS: set[int] = {
     int(x.strip())
     for x in os.getenv("ALLOWED_TELEGRAM_CHAT_IDS", "").split(",")
@@ -316,8 +320,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 
+STARTUP_MESSAGE = (
+    "🔄 <b>Bot LabMedis (re)démarré</b>\n"
+    "Nouvelle version en ligne — envoyez /reset pour repartir sur une "
+    "nouvelle conversation propre."
+)
+
+
+async def _announce_startup(app: Application) -> None:
+    """Envoie un message aux chat_ids autorisés pour signaler que le bot est up.
+
+    Fire-and-forget par destinataire : une erreur d'envoi ne doit jamais faire
+    échouer le démarrage du bot (chat_id périmé, bot bloqué par l'utilisateur…).
+    Silencieux si TELEGRAM_STARTUP_ANNOUNCE=off ou si aucun chat_id autorisé.
+    """
+    if not STARTUP_ANNOUNCE_ENABLED:
+        logger.info("Startup announce désactivé (TELEGRAM_STARTUP_ANNOUNCE=off).")
+        return
+    if not ALLOWED_CHAT_IDS:
+        logger.info("Startup announce ignoré : ALLOWED_TELEGRAM_CHAT_IDS vide.")
+        return
+
+    for chat_id in sorted(ALLOWED_CHAT_IDS):
+        try:
+            await app.bot.send_message(chat_id=chat_id, text=STARTUP_MESSAGE, parse_mode="HTML")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Startup announce KO chat=%s : %s", chat_id, e)
+
+
 async def _post_init(app: Application) -> None:
-    """Charge les tools MCP au démarrage + instancie le client Anthropic."""
+    """Charge les tools MCP au démarrage + instancie le client Anthropic + annonce."""
     logger.info("Fetching MCP tools from %s...", MCP_URL)
     try:
         tools = await _fetch_mcp_tools()
@@ -328,6 +360,8 @@ async def _post_init(app: Application) -> None:
 
     # AsyncAnthropic lit automatiquement ANTHROPIC_API_KEY depuis l'environnement.
     app.bot_data["anthropic"] = AsyncAnthropic()
+
+    await _announce_startup(app)
 
 
 def main() -> None:

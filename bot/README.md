@@ -117,6 +117,7 @@ Toute personne dont le `chat_id` n'est pas dans la liste reçoit un refus poli a
 | `ALLOWED_TELEGRAM_CHAT_IDS` | *(vide)* | Chat IDs autorisés, séparés par `,` |
 | `MAX_HISTORY_MESSAGES` | `20` | Historique conversationnel max par chat |
 | `MAX_TOKENS` | `2048` | Tokens de sortie max par réponse Claude |
+| `TELEGRAM_STARTUP_ANNOUNCE` | `on` | Envoi d'un message aux chat_ids autorisés à chaque démarrage/redéploiement pour signaler que le bot est up + suggérer `/reset`. Mettre `off` pour désactiver (utile en dev/tests). |
 
 ## Ajouter un utilisateur autorisé plus tard
 
