@@ -1,6 +1,6 @@
 # Bot Telegram LabMedis
 
-Assistant conversationnel Telegram propulsé par OpenAI + le serveur MCP interne.
+Assistant conversationnel Telegram propulsé par **Claude (Anthropic)** + le serveur MCP interne.
 Mode consultation uniquement : produits, stock, lots, péremption, clients, fournisseurs,
 commandes, factures, livraisons, mouvements, KPIs.
 
@@ -10,9 +10,9 @@ commandes, factures, livraisons, mouvements, KPIs.
 Utilisateur Telegram
         │
         ▼ (polling)
-labmedis-telegram-bot ────────────► API OpenAI (Chat Completions)
+labmedis-telegram-bot ────────────► API Anthropic (Messages API)
         │                                    │
-        │  (client MCP interne HTTP)         │  (tool_calls)
+        │  (client MCP interne HTTP)         │  (tool_use blocks)
         ▼                                    ▼
 labmedis-mcp ─────────► labmedis-postgres (read-only)
 ```
@@ -20,10 +20,10 @@ labmedis-mcp ─────────► labmedis-postgres (read-only)
 Le bot :
 1. Reçoit un message Telegram.
 2. Vérifie que le `chat_id` est dans la whitelist.
-3. Récupère la liste des tools MCP (au démarrage, en cache) au format OpenAI (`type=function`).
-4. Envoie le message + tools à OpenAI.
-5. Si le modèle renvoie des `tool_calls` → proxy vers le MCP local, renvoie chaque résultat en message `role=tool`.
-6. Boucle jusqu'à obtenir une réponse texte finale, l'envoie sur Telegram.
+3. Récupère la liste des tools MCP (au démarrage, en cache) au format Anthropic (`name` / `description` / `input_schema`).
+4. Envoie le message + tools à Claude, avec `cache_control` sur les tools + les règles du system prompt (les deux sont statiques → cache hit dès la 2e requête).
+5. Si Claude renvoie des `tool_use` blocks → proxy vers le MCP local, renvoie chaque résultat dans un message `user` contenant les `tool_result` blocks correspondants.
+6. Boucle jusqu'à obtenir un `stop_reason` autre que `tool_use`, envoie la réponse texte finale sur Telegram.
 
 Le MCP n'est **jamais exposé publiquement** — seul le bot y accède via le réseau
 Docker interne `labmedis-net`.
@@ -36,10 +36,10 @@ Docker interne `labmedis-net`.
 - `/newbot` → nom du bot (ex : "LabMedis Assistant") → username (ex : `labmedis_assistant_bot`).
 - BotFather te donne un **token** (`123456:AAExxxxxxxxxx`) — c'est ta `TELEGRAM_BOT_TOKEN`.
 
-### 2. Obtenir ta clé OpenAI
+### 2. Obtenir ta clé Anthropic
 
-- Va sur https://platform.openai.com/api-keys → **Create new secret key**.
-- Copie la clé (`sk-...`) — c'est ta `OPENAI_API_KEY`.
+- Va sur https://console.anthropic.com/settings/keys → **Create Key**.
+- Copie la clé (`sk-ant-api03-...`) — c'est ta `ANTHROPIC_API_KEY`.
 
 ### 3. Configurer le `.env` à la racine du projet
 
@@ -47,8 +47,8 @@ Ajoute ces lignes au `.env` (à la racine `LabMedis/`, pas dans `bot/`) :
 
 ```
 TELEGRAM_BOT_TOKEN=123456:AAExxxxxxxxxx
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
-OPENAI_MODEL=gpt-4o-mini
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ANTHROPIC_MODEL=claude-sonnet-4-6
 # Laisser VIDE au premier démarrage — tu obtiendras ton chat_id à l'étape 5
 ALLOWED_TELEGRAM_CHAT_IDS=
 ```
@@ -69,7 +69,7 @@ docker compose -f docker-compose.prod.yml logs -f telegram-bot
 
 Log attendu :
 ```
-Starting bot — model=gpt-4o-mini mcp=http://mcp:8080/ allowed_chat_ids=ALL (public!)
+Starting bot — model=claude-sonnet-4-6 mcp=http://mcp:8080/ allowed_chat_ids=ALL (public!)
 Loaded 22 MCP tools
 ```
 
@@ -111,12 +111,12 @@ Toute personne dont le `chat_id` n'est pas dans la liste reçoit un refus poli a
 | Var | Défaut | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | *(obligatoire)* | Token BotFather |
-| `OPENAI_API_KEY` | *(obligatoire)* | Clé API OpenAI |
-| `OPENAI_MODEL` | `gpt-4o-mini` | ID du modèle OpenAI |
+| `ANTHROPIC_API_KEY` | *(obligatoire)* | Clé API Anthropic |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | ID du modèle Claude (voir alternatives ci-dessous) |
 | `MCP_URL` | `http://mcp:8080/` | URL du serveur MCP (interne) |
 | `ALLOWED_TELEGRAM_CHAT_IDS` | *(vide)* | Chat IDs autorisés, séparés par `,` |
 | `MAX_HISTORY_MESSAGES` | `20` | Historique conversationnel max par chat |
-| `MAX_TOKENS` | `2048` | Tokens de sortie max par réponse OpenAI |
+| `MAX_TOKENS` | `2048` | Tokens de sortie max par réponse Claude |
 
 ## Ajouter un utilisateur autorisé plus tard
 
@@ -125,14 +125,22 @@ Toute personne dont le `chat_id` n'est pas dans la liste reçoit un refus poli a
 3. Tu l'ajoutes dans `ALLOWED_TELEGRAM_CHAT_IDS` (séparés par `,`).
 4. `docker compose restart telegram-bot` (ou variante prod).
 
-## Coût
+## Coût & modèles Claude
 
-Chaque message = 1+ appel OpenAI (plus si le modèle enchaîne plusieurs outils).
-Ordre de grandeur avec `gpt-4o-mini` : ~0.0005–0.005 USD par question typique.
-Pour de meilleures réponses (~10-15× plus cher), passer à `OPENAI_MODEL=gpt-4o`.
+Le bot bénéficie du **prompt caching** : les 22+ schemas d'outils MCP et la partie statique du system prompt (~1500 tokens) sont marqués `cache_control` et servis à ~10 % du prix d'entrée normal dès la 2e requête (TTL 5 min, re-cache si idle > 5 min). Seuls la date du jour, l'historique récent et la question de l'utilisateur passent au prix plein.
+
+Ordre de grandeur par question (après cache hit) :
+
+| Modèle | Prix input / output (1M tokens) | Coût par Q typique |
+|---|---|---|
+| `claude-haiku-4-5` | $1 / $5 | ~0.001 – 0.005 $ |
+| `claude-sonnet-4-6` *(défaut)* | $3 / $15 | ~0.003 – 0.015 $ |
+| `claude-opus-4-7` | $5 / $25 | ~0.005 – 0.025 $ |
+
+Sonnet 4.6 est le sweet spot pour ce cas d'usage : raisonnement solide sur les enchaînements d'outils, coût maîtrisé. Passe à Haiku si le volume explose et que les questions restent simples, à Opus pour les analyses complexes multi-étapes.
 
 ## Extension future WhatsApp
 
-Le bot est structuré autour de `_run_openai_conversation()` qui ne dépend pas de
+Le bot est structuré autour de `_run_claude_conversation()` qui ne dépend pas de
 Telegram. Pour WhatsApp, garder cette fonction et remplacer la couche `python-telegram-bot`
 par `whatsapp-web.js` (Node) ou l'API officielle WhatsApp Business (webhook FastAPI).

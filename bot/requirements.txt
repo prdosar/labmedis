@@ -1,3 +1,3 @@
 python-telegram-bot>=21.6
-openai>=1.50
+anthropic>=0.60
 mcp>=1.10
