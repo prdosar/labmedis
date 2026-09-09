@@ -13,10 +13,15 @@ namespace LabMedis.Infrastructure.Services;
 public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICustomerCreditNoteService
 {
     private readonly ILogger<CustomerCreditNoteService> _logger;
+    private readonly ITelegramNotificationService _telegram;
 
-    public CustomerCreditNoteService(AppDbContext dbContext, ILogger<CustomerCreditNoteService> logger) : base(dbContext)
+    public CustomerCreditNoteService(
+        AppDbContext dbContext,
+        ILogger<CustomerCreditNoteService> logger,
+        ITelegramNotificationService telegram) : base(dbContext)
     {
         _logger = logger;
+        _telegram = telegram;
     }
 
     // ── Queries ─────────────────────────────────────────────────────────────────
@@ -153,6 +158,9 @@ public class CustomerCreditNoteService : BaseRepository<CustomerCreditNote>, ICu
         await UpdateAsync(creditNote, ct);
 
         _logger.LogInformation("Avoir client créé Id={Id} Reference={Reference} Client={CustomerId}", creditNote.Id, creditNote.Reference, creditNote.CustomerId);
+
+        await _telegram.NotifyCustomerCreditNoteCreatedAsync(creditNote.Id, ct);
+
         return await GetByIdAsync(creditNote.Id, ct) ?? ToDto(creditNote);
     }
 

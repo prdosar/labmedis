@@ -89,6 +89,108 @@ public class TelegramNotificationService : ITelegramNotificationService
         }
     }
 
+    public async Task NotifySupplierOrderCreatedAsync(long orderId, CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+        try
+        {
+            var order = await _db.SupplierOrders
+                .Include(o => o.Supplier)
+                .Include(o => o.Lines)
+                .FirstOrDefaultAsync(o => o.Id == orderId, ct);
+            if (order is null) return;
+
+            var totalUnits = order.Lines.Sum(l => l.Quantity);
+            var msg =
+                "📥 <b>Nouvelle commande fournisseur</b>\n" +
+                $"Réf : <code>{order.Reference}</code>\n" +
+                $"Fournisseur : {Escape(order.Supplier?.Name ?? "—")}\n" +
+                $"Lignes : {order.Lines.Count} ({totalUnits} unité(s))\n" +
+                $"Devise : {order.Currency}\n" +
+                $"Date : {order.OrderDate:dd/MM/yyyy}";
+            await SendToAllAsync(msg, ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Notification 'commande fournisseur créée' KO orderId={OrderId}", orderId);
+        }
+    }
+
+    public async Task NotifyCustomerCreditNoteCreatedAsync(long creditNoteId, CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+        try
+        {
+            var creditNote = await _db.CustomerCreditNotes
+                .Include(c => c.Customer)
+                .Include(c => c.Invoice)
+                .Include(c => c.Lines)
+                .FirstOrDefaultAsync(c => c.Id == creditNoteId, ct);
+            if (creditNote is null) return;
+
+            var totalReturned = creditNote.Lines.Sum(l => l.QuantityReturned);
+            var invoiceLine = creditNote.Invoice is null
+                ? "Sans facture liée (remboursement direct)"
+                : $"Facture : <code>{Escape(creditNote.Invoice.Reference)}</code>";
+
+            var msg =
+                "🔄 <b>Retour client (avoir)</b>\n" +
+                $"Réf : <code>{creditNote.Reference}</code>\n" +
+                $"Client : {Escape(creditNote.Customer?.Name ?? "—")}\n" +
+                $"{invoiceLine}\n" +
+                $"Lignes : {creditNote.Lines.Count} ({totalReturned} unité(s) retournées)\n" +
+                $"Montant : {creditNote.TotalAmountTtc:N0} XOF TTC\n" +
+                $"Date : {creditNote.CreditNoteDate:dd/MM/yyyy}";
+            await SendToAllAsync(msg, ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Notification 'avoir client créé' KO creditNoteId={CreditNoteId}", creditNoteId);
+        }
+    }
+
+    public async Task NotifySupplierGoodsReceivedAsync(long purchaseId, CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+        try
+        {
+            var purchase = await _db.Purchases
+                .Include(p => p.Supplier)
+                .Include(p => p.Lines)
+                .FirstOrDefaultAsync(p => p.Id == purchaseId, ct);
+            if (purchase is null) return;
+
+            string? orderRef = null;
+            if (purchase.SupplierOrderId.HasValue)
+            {
+                orderRef = await _db.SupplierOrders
+                    .Where(o => o.Id == purchase.SupplierOrderId.Value)
+                    .Select(o => o.Reference)
+                    .FirstOrDefaultAsync(ct);
+            }
+
+            var arrivalDate = purchase.ArrivalDate ?? purchase.PurchaseDate;
+            var lostLine = purchase.TotalLostCartons > 0
+                ? $"\n⚠️ Pertes : {purchase.TotalLostCartons} carton(s) → avoir fournisseur auto-généré"
+                : string.Empty;
+
+            var msg =
+                "📦 <b>Réception marchandises fournisseur</b>\n" +
+                $"Arrivage : <code>{Escape(purchase.Reference)}</code>\n" +
+                $"BC : <code>{Escape(orderRef ?? "—")}</code>\n" +
+                $"Fournisseur : {Escape(purchase.Supplier?.Name ?? "—")}\n" +
+                $"Lignes : {purchase.Lines.Count} ({purchase.TotalGoodUnits} unité(s) bonnes)\n" +
+                $"Total FOB : {purchase.TotalFobXof:N0} XOF" +
+                lostLine + "\n" +
+                $"Date : {arrivalDate:dd/MM/yyyy}";
+            await SendToAllAsync(msg, ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Notification 'réception fournisseur' KO purchaseId={PurchaseId}", purchaseId);
+        }
+    }
+
     public async Task NotifyStockChangesAsync(IEnumerable<long> productIds, CancellationToken ct = default)
     {
         if (!IsConfigured()) return;
