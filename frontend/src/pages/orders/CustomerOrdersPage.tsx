@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Eye, CheckCircle, XCircle, CheckCheck, Search, X, Package } from 'lucide-react'
 import type { CustomerOrderSummaryDto } from '../../api/types'
@@ -37,18 +37,25 @@ export function CustomerOrdersPage() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
 
-  const fetcher = useCallback(
-    (p: number, s: number) => customerOrdersApi.getAll({ page: p, size: s, status: statusFilter || undefined }),
-    [statusFilter],
-  )
-  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 20 })
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
-  const filtered = (data?.items ?? []).filter(r =>
-    r.reference.toLowerCase().includes(search.toLowerCase()) ||
-    r.customerName.toLowerCase().includes(search.toLowerCase()),
+  const fetcher = useCallback(
+    (p: number, s: number) => customerOrdersApi.getAll({
+      page: p, size: s,
+      status: statusFilter || undefined,
+      search: search || undefined,
+    }),
+    [statusFilter, search],
   )
+  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 10 })
+
+  const rows = data?.items ?? []
 
   const [confirmAction, setConfirmAction] = useState<{ order: CustomerOrderSummaryDto; action: 'validate' | 'cancel' } | null>(null)
   const [completeTarget, setCompleteTarget] = useState<CustomerOrderSummaryDto | null>(null)
@@ -97,7 +104,7 @@ export function CustomerOrdersPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <p className="text-sm text-gray-500">
-            {data ? `${search ? `${filtered.length} / ` : ''}${data.totalCount} commande(s)` : ''}
+            {data ? `${data.totalCount} commande(s)` : ''}
           </p>
           <select
             value={statusFilter}
@@ -118,20 +125,20 @@ export function CustomerOrdersPage() {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
           type="text"
-          placeholder="Rechercher…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher (référence ou client)…"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           className={searchInputClass}
         />
-        {search && (
-          <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5">
+        {searchInput && (
+          <button onClick={() => setSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5">
             <X size={13} />
           </button>
         )}
       </div>
 
       <DataTable
-        rows={filtered}
+        rows={rows}
         loading={loading}
         keyExtractor={r => r.id}
         emptyMessage="Aucune commande."
@@ -240,7 +247,7 @@ export function CustomerOrdersPage() {
         )}
       />
 
-      {data && !search && (
+      {data && (
         <Pagination
           page={page}
           totalPages={data.totalPages}

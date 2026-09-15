@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Edit2, Send, XCircle, Search, X, FileInput,
@@ -63,20 +63,26 @@ export function SupplierOrdersPage() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const fetcher = useCallback(
     (p: number, s: number) =>
-      supplierOrdersApi.getAll({ page: p, size: s, status: statusFilter || undefined }),
-    [statusFilter],
+      supplierOrdersApi.getAll({
+        page: p, size: s,
+        status: statusFilter || undefined,
+        search: search || undefined,
+      }),
+    [statusFilter, search],
   )
-  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 20 })
+  const { data, loading, page, setPage, refresh } = usePagedData({ fetcher, pageSize: 10 })
 
-  const filtered = (data?.items ?? []).filter(
-    r =>
-      r.reference.toLowerCase().includes(search.toLowerCase()) ||
-      r.supplierName.toLowerCase().includes(search.toLowerCase()),
-  )
+  const rows = data?.items ?? []
 
   const [confirmSend, setConfirmSend] = useState<SupplierOrderSummaryDto | null>(null)
   const [confirmCancel, setConfirmCancel] = useState<SupplierOrderSummaryDto | null>(null)
@@ -149,7 +155,7 @@ export function SupplierOrdersPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <p className="text-sm text-gray-500">
-            {data ? `${search ? `${filtered.length} / ` : ''}${data.totalCount} commande(s)` : ''}
+            {data ? `${data.totalCount} commande(s)` : ''}
           </p>
           <select
             value={statusFilter}
@@ -178,14 +184,14 @@ export function SupplierOrdersPage() {
         />
         <input
           type="text"
-          placeholder="Rechercher…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher (référence ou fournisseur)…"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           className={searchInputClass}
         />
-        {search && (
+        {searchInput && (
           <button
-            onClick={() => setSearch('')}
+            onClick={() => setSearchInput('')}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
           >
             <X size={13} />
@@ -194,7 +200,7 @@ export function SupplierOrdersPage() {
       </div>
 
       <DataTable
-        rows={filtered}
+        rows={rows}
         loading={loading}
         keyExtractor={r => r.id}
         emptyMessage="Aucun bon de commande fournisseur."
@@ -391,7 +397,7 @@ export function SupplierOrdersPage() {
         )}
       />
 
-      {data && !search && (
+      {data && (
         <Pagination
           page={page}
           totalPages={data.totalPages}

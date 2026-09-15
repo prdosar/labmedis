@@ -5,7 +5,7 @@ namespace LabMedis.Application.Services;
 
 public interface ICustomerOrderService
 {
-    Task<PagedResult<CustomerOrderSummaryDto>> GetAllAsync(int page, int size, string? status, long? customerId, CancellationToken ct = default);
+    Task<PagedResult<CustomerOrderSummaryDto>> GetAllAsync(int page, int size, string? status, long? customerId, string? search = null, CancellationToken ct = default);
     Task<CustomerOrderDto?> GetByIdAsync(long id, CancellationToken ct = default);
     Task<CustomerOrderDto> CreateAsync(CustomerOrderCreateDto dto, CancellationToken ct = default);
     Task<CustomerOrderDto?> UpdateAsync(long id, CustomerOrderUpdateDto dto, CancellationToken ct = default);

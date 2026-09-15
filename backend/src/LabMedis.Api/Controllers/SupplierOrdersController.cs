@@ -19,8 +19,9 @@ public class SupplierOrdersController : ControllerBase
         [FromQuery] int size = 20,
         [FromQuery] string? status = null,
         [FromQuery] long? supplierId = null,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, status, supplierId, ct));
+        => Ok(await _service.GetAllAsync(page, size, status, supplierId, search, ct));
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<SupplierOrderDto>> GetById(long id, CancellationToken ct)

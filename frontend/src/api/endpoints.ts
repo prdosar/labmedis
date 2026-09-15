@@ -520,10 +520,11 @@ export const accountingApi = {
 // ─── CustomerOrders ──────────────────────────────────────────────────────────
 
 export const customerOrdersApi = {
-  getAll: (params: { page?: number; size?: number; status?: string; customerId?: number }) => {
+  getAll: (params: { page?: number; size?: number; status?: string; customerId?: number; search?: string }) => {
     const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
     if (params.status) qs.set('status', params.status)
     if (params.customerId) qs.set('customerId', String(params.customerId))
+    if (params.search) qs.set('search', params.search)
     return api.get<PagedResult<CustomerOrderSummaryDto>>(`/customer-orders?${qs}`)
   },
   getById: (id: number) => api.get<CustomerOrderDto>(`/customer-orders/${id}`),
@@ -566,10 +567,11 @@ export const customerOrdersApi = {
 // ─── SupplierOrders ──────────────────────────────────────────────────────────
 
 export const supplierOrdersApi = {
-  getAll: (params: { page?: number; size?: number; status?: string; supplierId?: number }) => {
+  getAll: (params: { page?: number; size?: number; status?: string; supplierId?: number; search?: string }) => {
     const qs = new URLSearchParams({ page: String(params.page ?? 1), size: String(params.size ?? 20) })
     if (params.status) qs.set('status', params.status)
     if (params.supplierId) qs.set('supplierId', String(params.supplierId))
+    if (params.search) qs.set('search', params.search)
     return api.get<PagedResult<SupplierOrderSummaryDto>>(`/supplier-orders?${qs}`)
   },
   /** Récupère les commandes en réception ou réceptionnées pour le formulaire OD */

@@ -19,8 +19,9 @@ public class CustomerOrdersController : ControllerBase
         [FromQuery] int size = 20,
         [FromQuery] string? status = null,
         [FromQuery] long? customerId = null,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, status, customerId, ct));
+        => Ok(await _service.GetAllAsync(page, size, status, customerId, search, ct));
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<CustomerOrderDto>> GetById(long id, CancellationToken ct)

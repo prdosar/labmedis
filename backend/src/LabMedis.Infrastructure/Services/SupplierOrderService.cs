@@ -30,7 +30,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     // ── Queries ─────────────────────────────────────────────────────────────────
 
     public async Task<PagedResult<SupplierOrderSummaryDto>> GetAllAsync(
-        int page, int size, string? status, long? supplierId, CancellationToken ct = default)
+        int page, int size, string? status, long? supplierId, string? search = null, CancellationToken ct = default)
     {
         var q = DbSet
             .Include(o => o.Supplier)
@@ -42,6 +42,13 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
             q = q.Where(o => o.Status == s);
         if (supplierId.HasValue)
             q = q.Where(o => o.SupplierId == supplierId);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            q = q.Where(o =>
+                o.Reference.ToLower().Contains(term) ||
+                (o.Supplier != null && o.Supplier.Name.ToLower().Contains(term)));
+        }
 
         q = q.OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.Id);
 

@@ -30,7 +30,7 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
     // ── Queries ─────────────────────────────────────────────────────────────────
 
     public async Task<PagedResult<CustomerOrderSummaryDto>> GetAllAsync(
-        int page, int size, string? status, long? customerId, CancellationToken ct = default)
+        int page, int size, string? status, long? customerId, string? search = null, CancellationToken ct = default)
     {
         var q = DbSet
             .Include(o => o.Customer)
@@ -41,6 +41,13 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
             q = q.Where(o => o.Status == s);
         if (customerId.HasValue)
             q = q.Where(o => o.CustomerId == customerId);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            q = q.Where(o =>
+                o.Reference.ToLower().Contains(term) ||
+                (o.Customer != null && o.Customer.Name.ToLower().Contains(term)));
+        }
 
         q = q.OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.Id);
 
