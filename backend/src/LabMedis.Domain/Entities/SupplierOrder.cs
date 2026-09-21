@@ -126,6 +126,8 @@ public class SupplierOrder : BaseEntity
     {
         if (Status is SupplierOrderStatus.Réceptionnée or SupplierOrderStatus.Convertie)
             throw new DomainException("Une commande déjà réceptionnée ne peut pas être annulée.");
+        if (Status is SupplierOrderStatus.EnCoursDeRéception)
+            throw new DomainException("Des arrivages ont déjà été enregistrés pour cette commande — supprimez-les ou clôturez la réception d'abord.");
         Status = SupplierOrderStatus.Annulée;
     }
 }

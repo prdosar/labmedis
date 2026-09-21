@@ -225,12 +225,44 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
     public async Task<SupplierOrderDto> CancelAsync(long id, CancellationToken ct = default)
     {
-        var order = await DbSet.FirstOrDefaultAsync(o => o.Id == id, ct)
+        var order = await DbSet
+            .Include(o => o.SupplierInvoice)
+            .FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new DomainException($"Bon de commande introuvable (Id={id}).");
 
         order.Cancel();
-        await DbContext.SaveChangesAsync(ct);
 
+        // Cascade soft-delete : la facture fournisseur associée + ses paiements + toutes
+        // les écritures comptables générées (facture, avance, règlements) sont marqués
+        // IsDeleted=true pour disparaître des états compta (grand livre, balance, relevé…).
+        // Les JournalLines ne sont pas cascade-delete côté EF, on doit les retirer explicitement.
+        if (order.SupplierInvoice is not null)
+        {
+            var invoice = order.SupplierInvoice;
+
+            var payments = await DbContext.SupplierInvoicePayments
+                .Where(p => p.SupplierInvoiceId == invoice.Id)
+                .ToListAsync(ct);
+
+            var journalEntries = await DbContext.JournalEntries
+                .Include(e => e.Lines)
+                .Where(e => e.SourceId == invoice.Id
+                         && (e.SourceType == "SupplierInvoice"
+                          || e.SourceType == "SupplierAdvance"
+                          || e.SourceType == "SupplierInvoicePayment"))
+                .ToListAsync(ct);
+
+            foreach (var entry in journalEntries)
+            {
+                foreach (var line in entry.Lines)
+                    DbContext.JournalLines.Remove(line);
+                DbContext.JournalEntries.Remove(entry);
+            }
+            foreach (var p in payments) DbContext.SupplierInvoicePayments.Remove(p);
+            DbContext.SupplierInvoices.Remove(invoice);
+        }
+
+        await DbContext.SaveChangesAsync(ct);
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }
 
