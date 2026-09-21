@@ -103,8 +103,12 @@ public static class DependencyInjection
         // n'est pas défini (utile en dev).
         services.AddHttpClient<ITelegramNotificationService, TelegramNotificationService>();
 
-        // Scan quotidien du catalogue (stock faible + péremption) — 07:00 UTC par défaut
-        services.AddHostedService<DailyStockScanBackgroundService>();
+        // Scan quotidien du catalogue (péremption uniquement) — 07:00 UTC par défaut.
+        // Le stock faible est notifié à chaud sur les ventes (CustomerOrderService.CompleteAsync).
+        services.AddHostedService<DailyExpirationScanBackgroundService>();
+
+        // Rapport d'inventaire mensuel — dernier jour du mois à 18:00 UTC par défaut.
+        services.AddHostedService<MonthlyInventoryReportBackgroundService>();
 
         return services;
     }

@@ -431,10 +431,11 @@ public class CustomerOrderService : BaseRepository<CustomerOrder>, ICustomerOrde
         order.Complete();
         await DbContext.SaveChangesAsync(ct);
 
-        // 8. Notifs Telegram : commande livrée + stock/péremption sur les produits impactés
+        // 8. Notifs Telegram : commande livrée + stock faible sur les produits impactés
+        // (la péremption est gérée par le scan quotidien, pas ici)
         var impactedProductIds = lotLines.Select(l => l.ProductId).Distinct().ToList();
         await _telegram.NotifyCustomerOrderCompletedAsync(id, ct);
-        await _telegram.NotifyStockChangesAsync(impactedProductIds, ct);
+        await _telegram.NotifyLowStockAsync(impactedProductIds, ct);
 
         return await GetByIdAsync(id, ct) ?? throw new InvalidOperationException();
     }

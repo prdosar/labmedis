@@ -23,8 +23,22 @@ public interface ITelegramNotificationService
     Task NotifySupplierGoodsReceivedAsync(long purchaseId, CancellationToken ct = default);
 
     /// <summary>
-    /// Vérifie stock faible + péremption &lt; 6 mois pour chaque produit impacté
-    /// et envoie une notification par produit/lot dépassant un seuil.
+    /// Vérifie le stock faible pour chaque produit impacté et envoie une
+    /// notification par produit dépassant le seuil. Appelée sur événement
+    /// métier (ex : Complete d'une commande client qui affecte le stock).
     /// </summary>
-    Task NotifyStockChangesAsync(IEnumerable<long> productIds, CancellationToken ct = default);
+    Task NotifyLowStockAsync(IEnumerable<long> productIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Vérifie les lots proches péremption (&lt; 6 mois) pour chaque produit
+    /// et envoie une notification par lot concerné. Appelée par le scan
+    /// quotidien du catalogue.
+    /// </summary>
+    Task NotifyExpiringLotsAsync(IEnumerable<long> productIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Envoie un rapport d'inventaire mensuel listant les produits avec stock
+    /// résiduel &gt; 0. Appelée par le scan mensuel de fin de mois.
+    /// </summary>
+    Task SendMonthlyInventoryReportAsync(CancellationToken ct = default);
 }

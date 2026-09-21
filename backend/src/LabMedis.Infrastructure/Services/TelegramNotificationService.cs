@@ -191,21 +191,111 @@ public class TelegramNotificationService : ITelegramNotificationService
         }
     }
 
-    public async Task NotifyStockChangesAsync(IEnumerable<long> productIds, CancellationToken ct = default)
+    public async Task NotifyLowStockAsync(IEnumerable<long> productIds, CancellationToken ct = default)
     {
         if (!IsConfigured()) return;
         try
         {
             foreach (var productId in productIds.Distinct())
-            {
                 await CheckAndNotifyLowStockAsync(productId, ct);
-                await CheckAndNotifyExpiringAsync(productId, ct);
-            }
         }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Notification stock/péremption KO");
+            _logger.LogWarning(e, "Notification stock faible KO");
         }
+    }
+
+    public async Task NotifyExpiringLotsAsync(IEnumerable<long> productIds, CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+        try
+        {
+            foreach (var productId in productIds.Distinct())
+                await CheckAndNotifyExpiringAsync(productId, ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Notification péremption KO");
+        }
+    }
+
+    public async Task SendMonthlyInventoryReportAsync(CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+        try
+        {
+            var today = DateTime.UtcNow.Date;
+            var rows = await _db.Products
+                .Where(p => !p.IsDeleted)
+                .Select(p => new
+                {
+                    p.Designation,
+                    Upc = p.Packaging != null ? p.Packaging.UnitsPerPackaging : 1,
+                    Stock = _db.PurchaseLines
+                        .Where(pl => pl.ProductId == p.Id && !pl.IsDeleted)
+                        .Sum(pl => (int?)pl.QuantityRemaining) ?? 0,
+                })
+                .Where(x => x.Stock > 0)
+                .OrderBy(x => x.Designation)
+                .ToListAsync(ct);
+
+            var header =
+                $"📋 <b>Inventaire mensuel — {FormatMonthYear(today)}</b>\n" +
+                $"Photo du stock au {today:dd/MM/yyyy}\n" +
+                $"{rows.Count} produit(s) avec stock résiduel\n\n";
+
+            if (rows.Count == 0)
+            {
+                await SendToAllAsync(header + "<i>Aucun produit avec stock résiduel.</i>", ct);
+                return;
+            }
+
+            var lines = new List<string>(rows.Count);
+            foreach (var r in rows)
+            {
+                if (r.Upc > 1)
+                {
+                    var cartons = Math.Round((decimal)r.Stock / r.Upc, 2);
+                    lines.Add($"• {Escape(r.Designation)} — {cartons} carton(s) ({r.Stock} u.)");
+                }
+                else
+                {
+                    lines.Add($"• {Escape(r.Designation)} — {r.Stock} unité(s)");
+                }
+            }
+
+            foreach (var chunk in ChunkLines(header, lines, maxChars: 3800))
+                await SendToAllAsync(chunk, ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Envoi rapport inventaire mensuel KO");
+        }
+    }
+
+    private static IEnumerable<string> ChunkLines(string header, IReadOnlyList<string> lines, int maxChars)
+    {
+        var sb = new System.Text.StringBuilder(header);
+        var first = true;
+        foreach (var line in lines)
+        {
+            var candidate = sb.Length + line.Length + 1;
+            if (candidate > maxChars && sb.Length > (first ? header.Length : 0))
+            {
+                yield return sb.ToString().TrimEnd();
+                sb.Clear();
+                first = false;
+            }
+            sb.Append(line).Append('\n');
+        }
+        if (sb.Length > 0) yield return sb.ToString().TrimEnd();
+    }
+
+    private static string FormatMonthYear(DateTime d)
+    {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        var month = culture.DateTimeFormat.GetMonthName(d.Month);
+        return $"{char.ToUpper(month[0])}{month[1..]} {d.Year}";
     }
 
     private async Task CheckAndNotifyLowStockAsync(long productId, CancellationToken ct)

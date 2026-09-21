@@ -10,35 +10,37 @@ namespace LabMedis.Infrastructure.Services;
 
 /// <summary>
 /// Scan quotidien du catalogue produits pour pousser les notifs Telegram
-/// "stock faible" et "péremption" — complète les notifs déclenchées par les
-/// évènements métier (Complete de commande client), qui ne couvrent que les
-/// produits touchés par la vente.
+/// "péremption" (lots à &lt; 6 mois de leur date d'expiration).
+///
+/// Le stock faible n'est plus scanné quotidiennement : il est notifié à
+/// chaud lorsqu'une vente affecte le stock (voir CustomerOrderService.CompleteAsync).
+/// L'inventaire résiduel est envoyé mensuellement par MonthlyInventoryReportBackgroundService.
 ///
 /// Config :
-/// - DAILY_STOCK_SCAN_ENABLED (défaut : on) — off/false/0 pour désactiver
-/// - DAILY_STOCK_SCAN_HOUR_UTC (défaut : 7) — Lomé étant UTC+0, 7 = 07:00 locale
+/// - DAILY_EXPIRATION_SCAN_ENABLED (défaut : on) — off/false/0 pour désactiver
+/// - DAILY_EXPIRATION_SCAN_HOUR_UTC (défaut : 7) — Lomé étant UTC+0, 7 = 07:00 locale
 /// </summary>
-public class DailyStockScanBackgroundService : BackgroundService
+public class DailyExpirationScanBackgroundService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<DailyStockScanBackgroundService> _logger;
+    private readonly ILogger<DailyExpirationScanBackgroundService> _logger;
     private readonly bool _enabled;
     private readonly int _scanHourUtc;
 
-    public DailyStockScanBackgroundService(
+    public DailyExpirationScanBackgroundService(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
-        ILogger<DailyStockScanBackgroundService> logger)
+        ILogger<DailyExpirationScanBackgroundService> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
 
-        var enabledRaw = configuration["DAILY_STOCK_SCAN_ENABLED"];
+        var enabledRaw = configuration["DAILY_EXPIRATION_SCAN_ENABLED"];
         _enabled = !string.Equals(enabledRaw, "false", StringComparison.OrdinalIgnoreCase)
                    && !string.Equals(enabledRaw, "off", StringComparison.OrdinalIgnoreCase)
                    && !string.Equals(enabledRaw, "0", StringComparison.OrdinalIgnoreCase);
 
-        _scanHourUtc = int.TryParse(configuration["DAILY_STOCK_SCAN_HOUR_UTC"], out var h) && h is >= 0 and <= 23
+        _scanHourUtc = int.TryParse(configuration["DAILY_EXPIRATION_SCAN_HOUR_UTC"], out var h) && h is >= 0 and <= 23
             ? h
             : 7;
     }
@@ -47,11 +49,11 @@ public class DailyStockScanBackgroundService : BackgroundService
     {
         if (!_enabled)
         {
-            _logger.LogInformation("DailyStockScan désactivé (DAILY_STOCK_SCAN_ENABLED).");
+            _logger.LogInformation("DailyExpirationScan désactivé (DAILY_EXPIRATION_SCAN_ENABLED).");
             return;
         }
 
-        _logger.LogInformation("DailyStockScan activé — cible {Hour:00}:00 UTC.", _scanHourUtc);
+        _logger.LogInformation("DailyExpirationScan activé — cible {Hour:00}:00 UTC.", _scanHourUtc);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -60,7 +62,7 @@ public class DailyStockScanBackgroundService : BackgroundService
             if (next <= now) next = next.AddDays(1);
 
             var wait = next - now;
-            _logger.LogInformation("DailyStockScan prochain run dans {Wait:hh\\:mm\\:ss} (à {Next:u}).", wait, next);
+            _logger.LogInformation("DailyExpirationScan prochain run dans {Wait:hh\\:mm\\:ss} (à {Next:u}).", wait, next);
 
             try
             {
@@ -77,7 +79,7 @@ public class DailyStockScanBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "DailyStockScan : échec du scan.");
+                _logger.LogError(ex, "DailyExpirationScan : échec du scan.");
             }
         }
     }
@@ -92,8 +94,8 @@ public class DailyStockScanBackgroundService : BackgroundService
             .Select(p => p.Id)
             .ToListAsync(ct);
 
-        _logger.LogInformation("DailyStockScan : {Count} produits à analyser.", productIds.Count);
-        await telegram.NotifyStockChangesAsync(productIds, ct);
-        _logger.LogInformation("DailyStockScan : terminé.");
+        _logger.LogInformation("DailyExpirationScan : {Count} produits à analyser.", productIds.Count);
+        await telegram.NotifyExpiringLotsAsync(productIds, ct);
+        _logger.LogInformation("DailyExpirationScan : terminé.");
     }
 }
