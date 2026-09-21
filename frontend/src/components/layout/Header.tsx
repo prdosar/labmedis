@@ -30,6 +30,8 @@ const titles: Record<string, string> = {
   '/accounting/trial-balance': 'Balance générale',
   '/accounting/pnl': 'Compte de résultat',
   '/accounting/third-party-ledger': 'Grand livre tiers',
+  '/accounting/supplier-account': 'Relevé fournisseur',
+  '/accounting/customer-account': 'Relevé client',
 }
 
 export function Header() {

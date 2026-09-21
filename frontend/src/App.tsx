@@ -46,6 +46,7 @@ import { TrialBalancePage } from './pages/accounting/TrialBalancePage'
 import { PnLPage } from './pages/accounting/PnLPage'
 import { ThirdPartyLedgerPage } from './pages/accounting/ThirdPartyLedgerPage'
 import { SupplierAccountPage } from './pages/accounting/SupplierAccountPage'
+import { CustomerAccountPage } from './pages/accounting/CustomerAccountPage'
 import { GeneralPurchasesPage } from './pages/accounting/GeneralPurchasesPage'
 import { OperatingExpensesPage } from './pages/accounting/OperatingExpensesPage'
 import { FixedAssetsPage } from './pages/accounting/FixedAssetsPage'
@@ -144,6 +145,7 @@ export default function App() {
               <Route path="/accounting/pnl" element={<PnLPage />} />
               <Route path="/accounting/third-party-ledger" element={<ThirdPartyLedgerPage />} />
               <Route path="/accounting/supplier-account" element={<SupplierAccountPage />} />
+              <Route path="/accounting/customer-account" element={<CustomerAccountPage />} />
               <Route path="/accounting/general-purchases" element={<GeneralPurchasesPage />} />
               <Route path="/accounting/operating-expenses" element={<OperatingExpensesPage />} />
               <Route path="/accounting/fixed-assets" element={<FixedAssetsPage />} />

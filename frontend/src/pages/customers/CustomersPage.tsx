@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X, Eye } from 'lucide-react'
+import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X, Eye, AlertTriangle } from 'lucide-react'
 import type { CustomerDto, CountryDto } from '../../api/types'
 import { customersApi, countriesApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -16,9 +16,10 @@ interface Form {
   name: string; address: string | null; postalBox: string | null
   phone: string | null; email: string | null; city: string | null
   countryId: string; contactPerson: string | null
+  chartAccountCode: string
 }
 
-const empty: Form = { name: '', address: null, postalBox: null, phone: null, email: null, city: null, countryId: '', contactPerson: null }
+const empty: Form = { name: '', address: null, postalBox: null, phone: null, email: null, city: null, countryId: '', contactPerson: null, chartAccountCode: '' }
 
 function toForm(c: CustomerDto): Form {
   return {
@@ -26,6 +27,7 @@ function toForm(c: CustomerDto): Form {
     phone: c.phone, email: c.email, city: c.city,
     countryId: c.countryId ? String(c.countryId) : '',
     contactPerson: c.contactPerson,
+    chartAccountCode: c.chartAccountCode ?? '',
   }
 }
 
@@ -69,6 +71,7 @@ export function CustomersPage() {
         postalBox: form.postalBox, phone: form.phone, email: form.email, city: form.city,
         countryId: form.countryId ? Number(form.countryId) : null,
         contactPerson: form.contactPerson,
+        chartAccountCode: form.chartAccountCode.trim() || null,
       }
       if (editing) { await customersApi.update(editing.id, dto); toast('Client mis à jour.') }
       else { await customersApi.create(dto); toast('Client créé.') }
@@ -119,6 +122,13 @@ export function CustomersPage() {
               {!r.isDeleted && r.contactPerson && <p className="text-xs text-gray-500">{r.contactPerson}</p>}
             </div>
           )},
+          { key: 'chartAccountCode', header: 'Sous-compte', width: 'w-40', render: r => r.chartAccountCode
+            ? <span className="font-mono text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{r.chartAccountCode}</span>
+            : <span title="Aucun sous-compte : ventes bloquées tant que le comptable ne le renseigne pas."
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                <AlertTriangle size={11}/> à renseigner
+              </span>
+          },
           { key: 'contact', header: 'Contact', render: r => (
             <div className="flex flex-col gap-0.5">
               {r.email && <a href={`mailto:${r.email}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1"><Mail size={11}/>{r.email}</a>}
@@ -162,6 +172,14 @@ export function CustomersPage() {
             <Input label="Personne de contact" value={form.contactPerson ?? ''} onChange={setF('contactPerson')} />
           </div>
           <Input label="Adresse" value={form.address ?? ''} onChange={setF('address')} />
+          <div className="flex flex-col gap-1">
+            <Input label="Sous-compte comptable" value={form.chartAccountCode}
+              onChange={e => setForm(f => ({ ...f, chartAccountCode: e.target.value }))}
+              placeholder="ex : 4111PHARM1" />
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Optionnel à la création. <strong>Aucune commande ne pourra être créée pour ce client tant que le sous-compte n'est pas renseigné</strong> — le comptable pourra le compléter plus tard depuis cette fiche.
+            </p>
+          </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
             <Button onClick={handleSave} loading={saving}>{editing ? 'Enregistrer' : 'Créer'}</Button>

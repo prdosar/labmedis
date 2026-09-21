@@ -109,6 +109,7 @@ export function ChartOfAccountsPage() {
     try {
       if (editTarget) {
         await accountingApi.updateChartAccount(editTarget.id, {
+          code: form.code.trim(),
           name: form.name.trim(),
           isThirdParty: form.isThirdParty,
           parentCode: form.parentCode.trim() || null,
@@ -287,7 +288,6 @@ export function ChartOfAccountsPage() {
               value={form.code}
               onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
               placeholder="ex : 6011"
-              disabled={!!editTarget}
             />
             <Input
               label="Intitulé *"

@@ -12,6 +12,8 @@ public record CustomerDto(
     long? CountryId,
     string? CountryName,
     string? ContactPerson,
+    long? ChartAccountId,
+    string? ChartAccountCode,
     decimal Balance,
     bool IsDeleted,
     DateTime CreatedAt,

@@ -16,6 +16,9 @@ public class Supplier : BaseEntity
     public long? CountryId { get; set; }
     public string? ContactPerson { get; set; }
 
+    public long? ChartAccountId { get; set; }
+    public ChartAccount? ChartAccount { get; set; }
+
     public Country? Country { get; set; }
     public IReadOnlyCollection<Product> Products => _products;
     public IReadOnlyCollection<Purchase> Purchases => _purchases;

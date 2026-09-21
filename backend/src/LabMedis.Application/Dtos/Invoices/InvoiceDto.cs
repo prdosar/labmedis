@@ -14,6 +14,8 @@ public record InvoiceDto(
     decimal AmountPaid,
     decimal BalanceDue,
     string? Notes,
+    long? CustomerOrderId,
+    string? CustomerOrderReference,
     IReadOnlyList<InvoiceLineDto> Lines,
     IReadOnlyList<InvoicePaymentDto> Payments,
     DateTime CreatedAt,

@@ -78,6 +78,8 @@ export interface SupplierDto {
   countryId: number | null
   countryName: string | null
   contactPerson: string | null
+  chartAccountId: number | null
+  chartAccountCode: string | null
   isDeleted: boolean
   createdAt: string
   updatedAt: string | null
@@ -97,6 +99,8 @@ export interface CustomerDto {
   countryId: number | null
   countryName: string | null
   contactPerson: string | null
+  chartAccountId: number | null
+  chartAccountCode: string | null
   balance: number
   isDeleted: boolean
   createdAt: string
@@ -454,15 +458,19 @@ export interface PurchaseDto {
 
 export interface InvoiceLineDto {
   id: number
+  invoiceId: number
   productId: number
   productCode: string | null
   productDesignation: string | null
   quantity: number
   unitPriceHt: number
   discountPercent: number
-  tvaPercent: number
-  totalHt: number
-  totalTtc: number
+  tvaRate: number
+  lineTotalHt: number
+  lineTva: number
+  lineTotalTtc: number
+  quantityDelivered: number
+  quantityRemainingToDeliver: number
 }
 
 export interface InvoicePaymentDto {
@@ -492,6 +500,8 @@ export interface InvoiceDto {
   amountPaid: number
   balanceDue: number
   notes: string | null
+  customerOrderId: number | null
+  customerOrderReference: string | null
   lines: InvoiceLineDto[]
   payments: InvoicePaymentDto[]
   createdAt: string

@@ -179,7 +179,7 @@ export function InvoiceDetailPage() {
                 <td className="px-4 py-2.5 text-right text-gray-700">{l.quantity}</td>
                 <td className="px-4 py-2.5 text-right text-gray-700">{fmtXof(l.unitPriceHt)}</td>
                 <td className="px-4 py-2.5 text-right text-gray-400">{l.discountPercent > 0 ? `${l.discountPercent}%` : '—'}</td>
-                <td className="px-4 py-2.5 text-right font-medium text-gray-900">{fmtXof(l.totalTtc)}</td>
+                <td className="px-4 py-2.5 text-right font-medium text-gray-900">{fmtXof(l.lineTotalTtc)}</td>
               </tr>
             ))}
           </tbody>

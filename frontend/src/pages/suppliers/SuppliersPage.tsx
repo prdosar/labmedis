@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X, Eye } from 'lucide-react'
+import { Plus, Pencil, Trash2, RotateCcw, Mail, Phone, Search, X, Eye, AlertTriangle } from 'lucide-react'
 import type { SupplierDto, CountryDto } from '../../api/types'
 import { suppliersApi, countriesApi } from '../../api/endpoints'
 import { usePagedData } from '../../hooks/usePagedData'
@@ -15,15 +15,17 @@ import { Input, Select } from '../../components/ui/Input'
 interface Form {
   name: string; address: string | null; postalBox: string | null
   phone: string | null; email: string | null; countryId: string; contactPerson: string | null
+  chartAccountCode: string
 }
 
-const empty: Form = { name: '', address: null, postalBox: null, phone: null, email: null, countryId: '', contactPerson: null }
+const empty: Form = { name: '', address: null, postalBox: null, phone: null, email: null, countryId: '', contactPerson: null, chartAccountCode: '' }
 
 function toForm(s: SupplierDto): Form {
   return {
     name: s.name, address: s.address, postalBox: s.postalBox,
     phone: s.phone, email: s.email, countryId: s.countryId ? String(s.countryId) : '',
     contactPerson: s.contactPerson,
+    chartAccountCode: s.chartAccountCode ?? '',
   }
 }
 
@@ -66,6 +68,7 @@ export function SuppliersPage() {
         phone: form.phone, email: form.email,
         countryId: form.countryId ? Number(form.countryId) : null,
         contactPerson: form.contactPerson,
+        chartAccountCode: form.chartAccountCode.trim() || null,
       }
       if (editing) { await suppliersApi.update(editing.id, dto); toast('Fournisseur mis à jour.') }
       else { await suppliersApi.create(dto); toast('Fournisseur créé.') }
@@ -116,6 +119,13 @@ export function SuppliersPage() {
               {!r.isDeleted && r.contactPerson && <p className="text-xs text-gray-500">{r.contactPerson}</p>}
             </div>
           )},
+          { key: 'chartAccountCode', header: 'Sous-compte', width: 'w-40', render: r => r.chartAccountCode
+            ? <span className="font-mono text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{r.chartAccountCode}</span>
+            : <span title="Aucun sous-compte : commandes bloquées tant que le comptable ne le renseigne pas."
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                <AlertTriangle size={11}/> à renseigner
+              </span>
+          },
           { key: 'contact', header: 'Contact', render: r => (
             <div className="flex flex-col gap-0.5">
               {r.email && <a href={`mailto:${r.email}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1"><Mail size={11}/>{r.email}</a>}
@@ -150,6 +160,14 @@ export function SuppliersPage() {
           </div>
           <Input label="Adresse" value={form.address ?? ''} onChange={setF('address')} placeholder="Rue, quartier…" />
           <Input label="Personne de contact" value={form.contactPerson ?? ''} onChange={setF('contactPerson')} placeholder="Nom du contact" />
+          <div className="flex flex-col gap-1">
+            <Input label="Sous-compte comptable" value={form.chartAccountCode}
+              onChange={e => setForm(f => ({ ...f, chartAccountCode: e.target.value }))}
+              placeholder="ex : 401101" />
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Optionnel à la création. <strong>Aucune commande fournisseur ne pourra être créée pour ce fournisseur tant que le sous-compte n'est pas renseigné</strong> — le comptable pourra le compléter plus tard depuis cette fiche.
+            </p>
+          </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
             <Button onClick={handleSave} loading={saving}>{editing ? 'Enregistrer' : 'Créer'}</Button>

@@ -5,7 +5,7 @@ namespace LabMedis.Application.Services;
 
 public interface IInvoiceService
 {
-    Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default);
+    Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, long? customerId = null, CancellationToken cancellationToken = default);
     Task<InvoiceDto?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
     Task<InvoiceDto> CreateAsync(InvoiceCreateDto dto, CancellationToken cancellationToken = default);
     Task<InvoiceDto?> UpdateAsync(long id, InvoiceUpdateDto dto, CancellationToken cancellationToken = default);

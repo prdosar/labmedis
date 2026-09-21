@@ -93,6 +93,7 @@ const accountingNav: NavItem[] = [
   { to: '/accounting/pnl', label: 'Compte de résultat', icon: <TrendingUp size={16} /> },
   { to: '/accounting/third-party-ledger', label: 'Grand livre tiers', icon: <BookUser size={16} /> },
   { to: '/accounting/supplier-account', label: 'Relevé fournisseur', icon: <Building2 size={16} /> },
+  { to: '/accounting/customer-account', label: 'Relevé client', icon: <Users size={16} /> },
   { to: '/accounting/general-purchases', label: 'Achats généraux', icon: <ShoppingCart size={16} /> },
   { to: '/accounting/operating-expenses', label: 'Charges', icon: <Receipt size={16} /> },
   { to: '/accounting/fixed-assets', label: 'Amortissements', icon: <TrendingDown size={16} /> },

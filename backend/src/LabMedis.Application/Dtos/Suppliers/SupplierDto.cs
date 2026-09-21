@@ -11,6 +11,8 @@ public record SupplierDto(
     long? CountryId,
     string? CountryName,
     string? ContactPerson,
+    long? ChartAccountId,
+    string? ChartAccountCode,
     bool IsDeleted,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

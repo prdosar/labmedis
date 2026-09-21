@@ -7,4 +7,5 @@ public record SupplierCreateDto(
     string? Phone,
     string? Email,
     long? CountryId,
-    string? ContactPerson);
+    string? ContactPerson,
+    string? ChartAccountCode);

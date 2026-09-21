@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, Eye, Plus, RotateCcw } from 'lucide-react'
+import { Search, X, Eye, Plus, RotateCcw, Printer } from 'lucide-react'
 import { invoicesApi, customerCreditNotesApi } from '../../api/endpoints'
 import type { InvoiceDto, CustomerCreditNoteDto } from '../../api/types'
 import { DataTable } from '../../components/ui/DataTable'
@@ -246,10 +246,18 @@ export function CustomerInvoicesPage() {
               },
             ]}
             actions={r => (
-              <button title="Voir détail" onClick={() => navigate(`/invoices/customers/${r.id}`)}
-                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
-                <Eye size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                {r.customerOrderId && (
+                  <button title="Imprimer la facture" onClick={() => navigate(`/orders/customers/${r.customerOrderId}?print=facture`)}
+                    className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+                    <Printer size={14} />
+                  </button>
+                )}
+                <button title="Voir détail" onClick={() => navigate(`/invoices/customers/${r.id}`)}
+                  className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+                  <Eye size={14} />
+                </button>
+              </div>
             )}
           />
         </>

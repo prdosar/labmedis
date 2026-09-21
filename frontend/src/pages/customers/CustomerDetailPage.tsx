@@ -99,8 +99,12 @@ export function CustomerDetailPage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{customer.code}</span>
+                  {customer.chartAccountCode
+                    ? <span title="Sous-compte comptable" className="font-mono text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{customer.chartAccountCode}</span>
+                    : <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Sous-compte à renseigner</span>
+                  }
                 </div>
                 <h1 className="text-xl font-bold text-gray-900 mt-1">{customer.name}</h1>
               </div>

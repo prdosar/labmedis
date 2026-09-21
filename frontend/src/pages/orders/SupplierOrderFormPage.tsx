@@ -118,6 +118,23 @@ export function SupplierOrderFormPage() {
     prevSupplierRef.current = supplierId
   }, [supplierId])
 
+  // Auto-print si arrivé via `?print=bc` (ex : lien depuis la liste des factures fournisseurs).
+  useEffect(() => {
+    if (searchParams.get('print') !== 'bc') return
+    if (initialLoading) return
+    if (isEdit && !orderRef) return  // attend le fetch de la commande
+    const timer = setTimeout(() => window.print(), 200)
+    const cleanupParam = () => {
+      searchParams.delete('print')
+      setSearchParams(searchParams, { replace: true })
+    }
+    window.addEventListener('afterprint', cleanupParam)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('afterprint', cleanupParam)
+    }
+  }, [initialLoading, isEdit, orderRef, searchParams, setSearchParams])
+
   function handleProductChange(idx: number, productId: string) {
     const product = products.find(p => String(p.id) === productId)
     const autoUnits = product?.packagingUnitsPerPackaging ? String(product.packagingUnitsPerPackaging) : ''

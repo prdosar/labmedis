@@ -7,4 +7,5 @@ public record SupplierUpdateDto(
     string? Phone,
     string? Email,
     long? CountryId,
-    string? ContactPerson);
+    string? ContactPerson,
+    string? ChartAccountCode);

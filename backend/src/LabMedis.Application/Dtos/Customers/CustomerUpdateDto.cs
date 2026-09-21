@@ -8,4 +8,5 @@ public record CustomerUpdateDto(
     string? Email,
     string? City,
     long? CountryId,
-    string? ContactPerson);
+    string? ContactPerson,
+    string? ChartAccountCode);

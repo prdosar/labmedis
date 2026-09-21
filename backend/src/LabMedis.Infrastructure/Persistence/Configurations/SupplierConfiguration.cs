@@ -25,5 +25,12 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
             .HasForeignKey(x => x.CountryId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Property(x => x.ChartAccountId);
+        builder.HasOne(x => x.ChartAccount)
+            .WithMany()
+            .HasForeignKey(x => x.ChartAccountId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

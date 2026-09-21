@@ -119,10 +119,12 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
 
     public async Task<SupplierOrderDto> CreateAsync(SupplierOrderCreateDto dto, CancellationToken ct = default)
     {
-        var supplierExists = await DbContext.Suppliers
-            .AnyAsync(s => s.Id == dto.SupplierId, ct);
-        if (!supplierExists)
+        var supplier = await DbContext.Suppliers
+            .FirstOrDefaultAsync(s => s.Id == dto.SupplierId, ct);
+        if (supplier is null)
             throw new DomainException($"Fournisseur introuvable (Id={dto.SupplierId}).");
+        if (supplier.ChartAccountId is null)
+            throw new DomainException($"Le fournisseur '{supplier.Name}' n'a pas de sous-compte comptable. Le comptable doit le renseigner avant toute commande.");
 
         var order = new SupplierOrder
         {
@@ -357,11 +359,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         DbContext.SupplierInvoicePayments.Add(payment);
 
         // Post accounting entry (JT – Journal de Trésorerie)
-        // D: 401 Fournisseur / C: 521 Trésorerie
-        var acc401 = await FindAccountAsync("401", ct);
+        // D: <sous-compte fournisseur> / C: 521 Trésorerie
+        var supplierAccount = await RequireSupplierAccountAsync(invoice.SupplierId, ct);
         var acc521 = await FindAccountAsync("521", ct) ?? await FindAccountAsync("5211", ct);
 
-        if (acc401 is not null && acc521 is not null)
+        if (acc521 is not null)
         {
             var entryDate = payment.PaymentDate.ToDateTime(TimeOnly.MinValue);
             var entry = new JournalEntry
@@ -374,7 +376,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
                 SourceId    = invoice.Id,
                 IsPosted    = false
             };
-            entry.AddLine(new JournalLine { AccountId = acc401.Id, Label = $"Règlement {invoice.InvoiceReference}", DebitAmount = dto.Amount, CreditAmount = 0, SupplierId = invoice.SupplierId });
+            entry.AddLine(new JournalLine { AccountId = supplierAccount.Id, Label = $"Règlement {invoice.InvoiceReference}", DebitAmount = dto.Amount, CreditAmount = 0, SupplierId = invoice.SupplierId });
             entry.AddLine(new JournalLine { AccountId = acc521.Id, Label = $"Règlement {invoice.InvoiceReference}", DebitAmount = 0, CreditAmount = dto.Amount });
             entry.Validate();
             DbContext.JournalEntries.Add(entry);
@@ -588,6 +590,10 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
         // Running base for cascading rates
         var runningBase = totalFobXof;
 
+        // Sous-compte fournisseur pour le crédit des charges (au lieu du parent 401).
+        var supplierAccount = await RequireSupplierAccountAsync(purchase.SupplierId, ct);
+        var supplierAccountCode = supplierAccount.Code;
+
         var charges = new[]
         {
             ("Commissions", "6342", dto.CommissionRate, "Commissions promo fournisseur"),
@@ -612,7 +618,7 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
                 ChargeDate = chargeDate,
                 Reference = $"PX-{arrivalRef}",
                 DebitAccountCode = debitCode,
-                CreditAccountCode = "401",
+                CreditAccountCode = supplierAccountCode,
                 Notes = $"Calculé automatiquement : {rate:P0} sur {runningBase:N0} XOF"
             };
 
@@ -728,13 +734,26 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     private async Task<ChartAccount?> FindAccountAsync(string code, CancellationToken ct)
         => await DbContext.ChartAccounts.FirstOrDefaultAsync(a => a.Code == code, ct);
 
+    // Retourne le sous-compte comptable du fournisseur (4011xxx) ou throw si non renseigné.
+    // Toute écriture liée à un fournisseur doit utiliser son sous-compte plutôt que le compte parent 401.
+    private async Task<ChartAccount> RequireSupplierAccountAsync(long supplierId, CancellationToken ct)
+    {
+        var account = await DbContext.Suppliers
+            .Where(s => s.Id == supplierId)
+            .Select(s => s.ChartAccount)
+            .FirstOrDefaultAsync(ct);
+        if (account is null)
+            throw new DomainException("Le fournisseur n'a pas de sous-compte comptable — impossible de comptabiliser. Le comptable doit renseigner son code d'abord.");
+        return account;
+    }
+
     private async Task PostInvoiceJournalEntryAsync(
         SupplierInvoice invoice, string supplierName, CancellationToken ct)
     {
         var achatAccount = await FindAccountAsync("601", ct) ?? await FindAccountAsync("6011", ct);
-        var fournisseurAccount = await FindAccountAsync("401", ct);
+        var fournisseurAccount = await RequireSupplierAccountAsync(invoice.SupplierId, ct);
 
-        if (achatAccount is null || fournisseurAccount is null) return;
+        if (achatAccount is null) return;
 
         var netXof = invoice.NetAmountXof;
         var entry = new JournalEntry
@@ -772,11 +791,11 @@ public class SupplierOrderService : BaseRepository<SupplierOrder>, ISupplierOrde
     private async Task PostAdvanceJournalEntryAsync(
         SupplierInvoice invoice, string supplierName, CancellationToken ct)
     {
-        // D: 401 Fournisseur (avance réduit la dette fournisseur) / C: 521 Banque
-        var fournisseurAccount = await FindAccountAsync("401", ct);
+        // D: <sous-compte fournisseur> (avance réduit la dette fournisseur) / C: 521 Banque
+        var fournisseurAccount = await RequireSupplierAccountAsync(invoice.SupplierId, ct);
         var banqueAccount = await FindAccountAsync("521", ct) ?? await FindAccountAsync("5211", ct);
 
-        if (fournisseurAccount is null || banqueAccount is null) return;
+        if (banqueAccount is null) return;
 
         var advXof = invoice.AdvanceAmountXof;
         var entry = new JournalEntry

@@ -150,6 +150,7 @@ interface SupplierWriteDto {
   email: string | null
   countryId: number | null
   contactPerson: string | null
+  chartAccountCode: string | null
 }
 
 export const suppliersApi = {
@@ -174,6 +175,7 @@ interface CustomerWriteDto {
   city: string | null
   countryId: number | null
   contactPerson: string | null
+  chartAccountCode: string | null
 }
 
 export const customersApi = {
@@ -252,8 +254,11 @@ function buildPaymentForm(data: PaymentFormData): FormData {
 export const invoicesApi = {
   getReturnableLines: (id: number) =>
     api.get<ReturnableInvoiceLineDto[]>(`/invoices/${id}/returnable-lines`),
-  getAll: (page = 1, size = 10) =>
-    api.get<PagedResult<InvoiceDto>>(`/invoices?page=${page}&size=${size}`),
+  getAll: (page = 1, size = 10, customerId?: number) => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) })
+    if (customerId) qs.set('customerId', String(customerId))
+    return api.get<PagedResult<InvoiceDto>>(`/invoices?${qs}`)
+  },
   getById: (id: number) => api.get<InvoiceDto>(`/invoices/${id}`),
   create: (dto: object) => api.post<InvoiceDto>('/invoices', dto),
   update: (id: number, dto: object) => api.put<InvoiceDto>(`/invoices/${id}`, dto),
@@ -467,7 +472,7 @@ export const accountingApi = {
   createChartAccount: (dto: { code: string; name: string; accountClass: string; normalBalance: string; isThirdParty: boolean; parentCode: string | null }) =>
     api.post<ChartAccountDto>('/accounting/chart-of-accounts', dto),
 
-  updateChartAccount: (id: number, dto: { name: string; isThirdParty: boolean; parentCode: string | null }) =>
+  updateChartAccount: (id: number, dto: { code: string; name: string; isThirdParty: boolean; parentCode: string | null }) =>
     api.put<ChartAccountDto>(`/accounting/chart-of-accounts/${id}`, dto),
 
   deleteChartAccount: (id: number) =>

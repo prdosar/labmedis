@@ -97,8 +97,28 @@ public class AccountingService : BaseRepository<JournalEntry>, IAccountingServic
         if (account.IsSystem)
             throw new DomainException("Les comptes système ne peuvent pas être modifiés.");
 
+        var newCode = dto.Code?.Trim() ?? "";
+        if (string.IsNullOrEmpty(newCode))
+            throw new DomainException("Le code du compte est obligatoire.");
+
         if (dto.ParentCode is not null && !await DbContext.ChartAccounts.AnyAsync(a => a.Code == dto.ParentCode, ct))
             throw new DomainException($"Compte parent introuvable : {dto.ParentCode}.");
+
+        // Renommage du code : vérifier l'unicité + cascader sur les enfants qui référencent l'ancien code.
+        if (newCode != account.Code)
+        {
+            if (await DbContext.ChartAccounts.AnyAsync(a => a.Id != id && a.Code == newCode, ct))
+                throw new DomainException($"Un autre compte utilise déjà le code '{newCode}'.");
+
+            var oldCode = account.Code;
+            var children = await DbContext.ChartAccounts
+                .Where(a => a.ParentCode == oldCode)
+                .ToListAsync(ct);
+            foreach (var child in children)
+                child.ParentCode = newCode;
+
+            account.Code = newCode;
+        }
 
         account.Name = dto.Name.Trim();
         account.IsThirdParty = dto.IsThirdParty;

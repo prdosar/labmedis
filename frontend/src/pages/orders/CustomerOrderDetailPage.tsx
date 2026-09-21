@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Upload, Trash2, FileText, Mail, X, Edit2, Package, CheckCheck } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import type { CustomerOrderDto, CustomerOrderDocumentDto, InvoiceDto, CustomerDto } from '../../api/types'
@@ -320,6 +320,7 @@ function formatXofPlain(n: number): string {
 
 export function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -370,6 +371,18 @@ export function CustomerOrderDetailPage() {
       window.removeEventListener('afterprint', onAfterPrint)
     }
   }, [printMode])
+
+  // Déclenche l'impression automatique si arrivé via `?print=facture` ou `?print=bl` (ex : lien depuis la liste des factures).
+  useEffect(() => {
+    const requested = searchParams.get('print')
+    if (!requested || !order) return
+    if (requested === 'facture' && !invoice) return  // attend l'invoice
+    if (requested === 'facture' || requested === 'bl') {
+      setPrintMode(requested)
+      searchParams.delete('print')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [order, invoice, searchParams, setSearchParams])
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

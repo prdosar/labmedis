@@ -9,6 +9,7 @@ public record CreateChartAccountDto(
     string? ParentCode);
 
 public record UpdateChartAccountDto(
+    string Code,
     string Name,
     bool IsThirdParty,
     string? ParentCode);

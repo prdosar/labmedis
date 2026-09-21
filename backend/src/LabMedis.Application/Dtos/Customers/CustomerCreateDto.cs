@@ -8,4 +8,5 @@ public record CustomerCreateDto(
     string? Email,
     string? City,
     long? CountryId,
-    string? ContactPerson);
+    string? ContactPerson,
+    string? ChartAccountCode);

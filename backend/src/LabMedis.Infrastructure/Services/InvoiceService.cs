@@ -22,18 +22,46 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
         _fileStorage = fileStorage;
     }
 
-    public async Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<InvoiceDto>> GetAllAsync(int page = 1, int size = 10, long? customerId = null, CancellationToken cancellationToken = default)
     {
+        var q = DbSet.AsQueryable();
+        if (customerId.HasValue) q = q.Where(i => i.CustomerId == customerId.Value);
+
         var skip = (page - 1) * size;
-        var total = await DbSet.CountAsync(cancellationToken);
-        var items = await DbSet
+        var total = await q.CountAsync(cancellationToken);
+        var items = await q
             .Include(i => i.Customer)
             .Include(i => i.Lines).ThenInclude(l => l.Product)
             .Include(i => i.Lines).ThenInclude(l => l.DeliveryLines)
             .OrderByDescending(i => i.InvoiceDate)
             .Skip(skip).Take(size)
             .ToListAsync(cancellationToken);
-        return new PagedResult<InvoiceDto>(items.Select(i => ToDto(i)).ToList(), total, page, size);
+
+        var invoiceIds = items.Select(i => i.Id).ToList();
+        var paymentsByInvoice = new Dictionary<long, List<InvoicePayment>>();
+        var orderByInvoice = new Dictionary<long, (long Id, string Reference)>();
+        if (invoiceIds.Count > 0)
+        {
+            var payments = await DbContext.InvoicePayments
+                .Where(p => invoiceIds.Contains(p.InvoiceId))
+                .OrderBy(p => p.PaymentDate)
+                .ToListAsync(cancellationToken);
+            paymentsByInvoice = payments.GroupBy(p => p.InvoiceId).ToDictionary(g => g.Key, g => g.ToList());
+
+            var orderRows = await DbContext.CustomerOrders
+                .Where(o => o.InvoiceId != null && invoiceIds.Contains(o.InvoiceId!.Value))
+                .Select(o => new { InvoiceId = o.InvoiceId!.Value, o.Id, o.Reference })
+                .ToListAsync(cancellationToken);
+            orderByInvoice = orderRows.ToDictionary(r => r.InvoiceId, r => (r.Id, r.Reference));
+        }
+
+        return new PagedResult<InvoiceDto>(
+            items.Select(i => ToDto(
+                i,
+                paymentsByInvoice.GetValueOrDefault(i.Id),
+                orderByInvoice.TryGetValue(i.Id, out var o) ? o : null
+            )).ToList(),
+            total, page, size);
     }
 
     public async Task<InvoiceDto?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
@@ -44,7 +72,11 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
             .Where(p => p.InvoiceId == id)
             .OrderBy(p => p.PaymentDate)
             .ToListAsync(cancellationToken);
-        return ToDto(item, payments);
+        var order = await DbContext.CustomerOrders
+            .Where(o => o.InvoiceId == id)
+            .Select(o => new { o.Id, o.Reference })
+            .FirstOrDefaultAsync(cancellationToken);
+        return ToDto(item, payments, order is null ? null : (order.Id, order.Reference));
     }
 
     public async Task<InvoiceDto> CreateAsync(InvoiceCreateDto dto, CancellationToken cancellationToken = default)
@@ -334,12 +366,13 @@ public class InvoiceService : BaseRepository<Invoice>, IInvoiceService
             .Include(i => i.Lines).ThenInclude(l => l.DeliveryLines)
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
-    private InvoiceDto ToDto(Invoice i, IEnumerable<InvoicePayment>? payments = null) => new(
+    private InvoiceDto ToDto(Invoice i, IEnumerable<InvoicePayment>? payments = null, (long Id, string Reference)? customerOrder = null) => new(
         i.Id, i.Reference, i.InvoiceDate, i.DueDate,
         i.CustomerId, i.Customer?.Name,
         i.Status.ToString(),
         i.SubtotalHt, i.TotalTva, i.TotalTtc, i.AmountPaid, i.BalanceDue,
         i.Notes,
+        customerOrder?.Id, customerOrder?.Reference,
         i.Lines.Select(ToLineDto).ToList(),
         (payments ?? []).Select(p => ToPaymentDto(p)).ToList(),
         i.CreatedAt, i.UpdatedAt);

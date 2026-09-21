@@ -129,6 +129,7 @@ export function CustomerOrderPreparationPage() {
         <Package size={15} className="mt-0.5 shrink-0 text-blue-500" />
         <span>
           Les lots sont proposés par ordre de <strong>date d'expiration la plus proche</strong> (FEFO).
+          Les lots <strong>périmés</strong> sont automatiquement exclus (vente interdite).
           Vous pouvez ajuster la répartition si un lot est inutilisable.
           La somme des quantités doit correspondre exactement à la quantité commandée.
         </span>

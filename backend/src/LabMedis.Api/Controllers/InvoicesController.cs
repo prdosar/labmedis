@@ -14,8 +14,8 @@ public class InvoicesController : ControllerBase
     public InvoicesController(IInvoiceService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<InvoiceDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, CancellationToken ct = default)
-        => Ok(await _service.GetAllAsync(page, size, ct));
+    public async Task<ActionResult<PagedResult<InvoiceDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int size = 10, [FromQuery] long? customerId = null, CancellationToken ct = default)
+        => Ok(await _service.GetAllAsync(page, size, customerId, ct));
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<InvoiceDto>> GetById(long id, CancellationToken ct)
